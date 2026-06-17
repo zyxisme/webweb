@@ -641,6 +641,39 @@ body {
   color: #ea4335;
 }
 
+/* Log Output */
+.log-output {
+  width: 100%;
+  height: 300px;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  border: 1px solid #333;
+}
+
+.log-output .log-info {
+  color: #4fc1ff;
+}
+
+.log-output .log-warn {
+  color: #cca700;
+}
+
+.log-output .log-error {
+  color: #f48771;
+}
+
+.log-output .log-success {
+  color: #6a9955;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   :root {

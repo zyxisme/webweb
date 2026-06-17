@@ -1,53 +1,46 @@
 // js/proxy.js
 const ProxyManager = {
-  // Log helper - checks App.verboseLogging if available
-  log(...args) {
-    if (typeof App !== 'undefined' && App.verboseLogging) {
-      console.log('[WebWeb]', ...args);
-    }
-  },
-
   // Initialize proxy - register Service Worker
   async init() {
-    this.log('Initializing proxy manager...');
+    App.log('Initializing proxy manager...');
 
     // Register Service Worker
     if ('serviceWorker' in navigator) {
       try {
         const registration = await navigator.serviceWorker.register('/sw.js');
-        this.log('Service Worker registered:', registration.scope);
+        App.log('Service Worker registered:', registration.scope);
 
         // Wait for Service Worker to be active
         if (registration.installing) {
-          this.log('Service Worker installing...');
+          App.log('Service Worker installing...');
           await new Promise((resolve) => {
             registration.installing.addEventListener('statechange', (e) => {
               if (e.target.state === 'activated') {
-                this.log('Service Worker activated');
+                App.log('Service Worker activated');
                 resolve();
               }
             });
           });
         } else if (registration.waiting) {
-          this.log('Service Worker waiting...');
+          App.log('Service Worker waiting...');
           await new Promise((resolve) => {
             registration.waiting.addEventListener('statechange', (e) => {
               if (e.target.state === 'activated') {
-                this.log('Service Worker activated');
+                App.log('Service Worker activated');
                 resolve();
               }
             });
           });
         }
 
-        this.log('✓ Service Worker ready');
+        App.log('✓ Service Worker ready');
         return true;
       } catch (error) {
-        console.error('[WebWeb] Service Worker registration failed:', error);
+        App.log('[ERROR] Service Worker registration failed:', error.message);
         return false;
       }
     } else {
-      console.warn('[WebWeb] Service Workers not supported');
+      App.log('[WARN] Service Workers not supported');
       return false;
     }
   },
@@ -61,11 +54,11 @@ const ProxyManager = {
   // Load a page into an iframe
   async loadPage(iframe, url) {
     try {
-      this.log('Loading page:', url);
+      App.log('Loading page:', url);
 
       // Build proxy URL
       const proxyUrl = this.buildProxyUrl(url);
-      this.log('Proxy URL:', proxyUrl);
+      App.log('Proxy URL:', proxyUrl);
 
       // Set iframe src instead of srcdoc
       iframe.src = proxyUrl;
@@ -73,10 +66,10 @@ const ProxyManager = {
       // Extract domain as title (will be updated when page loads)
       const title = this.extractDomain(url);
 
-      this.log('✓ Page loading:', url);
+      App.log('✓ Page loading:', url);
       return { success: true, title };
     } catch (error) {
-      console.error('[WebWeb] Failed to load page:', error);
+      App.log('[ERROR] Failed to load page:', error.message);
 
       // Provide helpful error message
       iframe.srcdoc = `

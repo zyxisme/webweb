@@ -1,13 +1,11 @@
 // js/app.js
 const App = {
-  // Verbose logging flag
-  verboseLogging: false,
+  // Log buffer
+  logBuffer: [],
+  maxLogLines: 1000,
 
   // Initialize application
   async init() {
-    // Load verbose logging setting
-    this.verboseLogging = localStorage.getItem('webweb-verbose-logging') === 'true';
-
     // Initialize proxy manager first (detect best proxy)
     await ProxyManager.init();
 
@@ -29,10 +27,44 @@ const App = {
     this.log('WebWeb Browser initialized');
   },
 
-  // Log helper - only logs when verbose mode is enabled
+  // Log helper - outputs to console and log panel
   log(...args) {
-    if (this.verboseLogging) {
-      console.log('[WebWeb]', ...args);
+    const timestamp = new Date().toLocaleTimeString();
+    const message = args.map(arg => {
+      if (typeof arg === 'object') {
+        try {
+          return JSON.stringify(arg, null, 2);
+        } catch {
+          return String(arg);
+        }
+      }
+      return String(arg);
+    }).join(' ');
+
+    const logEntry = `[${timestamp}] ${message}`;
+
+    // Output to console
+    console.log('[WebWeb]', ...args);
+
+    // Add to buffer
+    this.logBuffer.push(logEntry);
+
+    // Trim buffer if too large
+    if (this.logBuffer.length > this.maxLogLines) {
+      this.logBuffer = this.logBuffer.slice(-this.maxLogLines);
+    }
+
+    // Update log display if settings modal is open
+    this.updateLogDisplay();
+  },
+
+  // Update log display in settings modal
+  updateLogDisplay() {
+    const logOutput = document.getElementById('log-output');
+    if (logOutput) {
+      logOutput.textContent = this.logBuffer.join('\n');
+      // Auto-scroll to bottom
+      logOutput.scrollTop = logOutput.scrollHeight;
     }
   },
 
@@ -90,13 +122,6 @@ const App = {
       if (e.target.id === 'settings-modal') {
         this.closeSettings();
       }
-    });
-
-    // Verbose logging checkbox
-    document.getElementById('verbose-logging').addEventListener('change', (e) => {
-      this.verboseLogging = e.target.checked;
-      localStorage.setItem('webweb-verbose-logging', this.verboseLogging);
-      this.log('Verbose logging', this.verboseLogging ? 'enabled' : 'disabled');
     });
 
     // Keyboard shortcuts
@@ -251,8 +276,8 @@ const App = {
 
   // Open settings modal
   openSettings() {
-    // Restore verbose logging checkbox state
-    document.getElementById('verbose-logging').checked = this.verboseLogging;
+    // Update log display
+    this.updateLogDisplay();
     document.getElementById('settings-modal').classList.remove('hidden');
   },
 
