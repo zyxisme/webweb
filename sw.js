@@ -138,14 +138,26 @@ self.addEventListener('fetch', (event) => {
     })
     .catch(error => {
       console.error(`[SW] Proxy error for ${originalUrl}:`, error);
-      return new Response(JSON.stringify({
-        error: 'Proxy fetch failed',
-        message: error.message,
-        url: originalUrl
-      }), {
+
+      // Return user-friendly error page
+      const errorHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head><title>Proxy Error</title></head>
+        <body style="font-family: system-ui; padding: 40px; text-align: center;">
+          <h1 style="color: #d32f2f;">代理错误</h1>
+          <p style="color: #666;">无法加载页面: ${originalUrl}</p>
+          <p style="color: #999;">错误: ${error.message}</p>
+          <hr style="margin: 30px auto; max-width: 400px;">
+          <p style="color: #1a73e8;">💡 请检查网络连接或尝试其他网站</p>
+        </body>
+        </html>
+      `;
+
+      return new Response(errorHtml, {
         status: 502,
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'text/html; charset=utf-8',
           ...CORS_HEADERS
         }
       });
