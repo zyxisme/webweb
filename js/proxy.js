@@ -106,15 +106,38 @@ const ProxyManager = {
       return match;
     });
 
-    // Inject navigation tracking script
+    // Inject navigation tracking and API interception script
     const trackingScript = `
 <script>
 (function() {
   const proxyPrefix = '${proxyPrefix}';
+  const baseUrl = '${baseUrl}';
 
   function getOriginalUrl(url) {
     if (url.startsWith(proxyPrefix)) {
       return decodeURIComponent(url.substring(proxyPrefix.length));
+    }
+    return url;
+  }
+
+  function resolveUrl(url) {
+    if (!url || url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('javascript:')) {
+      return url;
+    }
+    try {
+      return new URL(url, baseUrl).href;
+    } catch (e) {
+      return url;
+    }
+  }
+
+  function proxyUrl(url) {
+    if (!url || url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('javascript:')) {
+      return url;
+    }
+    const absoluteUrl = resolveUrl(url);
+    if (absoluteUrl) {
+      return proxyPrefix + encodeURIComponent(absoluteUrl);
     }
     return url;
   }
@@ -146,6 +169,103 @@ const ProxyManager = {
       }, '*');
     }
   }, true);
+
+  // ===== JavaScript API Interception =====
+
+  // 1. Intercept fetch API
+  const originalFetch = window.fetch;
+  window.fetch = function(input, init) {
+    let url = input;
+    if (typeof url === 'string') {
+      url = proxyUrl(url);
+    } else if (url instanceof Request) {
+      url = new Request(proxyUrl(url.url), url);
+    }
+    return originalFetch.call(this, url, init);
+  };
+
+  // 2. Intercept XMLHttpRequest
+  const originalXHROpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
+    return originalXHROpen.call(this, method, proxyUrl(url), async, user, password);
+  };
+
+  // 3. Intercept Image constructor
+  const OriginalImage = window.Image;
+  window.Image = function(width, height) {
+    const img = new OriginalImage(width, height);
+    const originalSrcDescriptor = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+    Object.defineProperty(img, 'src', {
+      get: function() {
+        return originalSrcDescriptor.get.call(this);
+      },
+      set: function(value) {
+        originalSrcDescriptor.set.call(this, proxyUrl(value));
+      }
+    });
+    return img;
+  };
+  window.Image.prototype = OriginalImage.prototype;
+
+  // 4. Intercept document.createElement for script, link, img
+  const originalCreateElement = document.createElement.bind(document);
+  document.createElement = function(tagName, options) {
+    const element = originalCreateElement(tagName, options);
+    const lowerTagName = tagName.toLowerCase();
+
+    if (['script', 'link', 'img', 'video', 'audio', 'source', 'iframe'].includes(lowerTagName)) {
+      const originalSrcDescriptor = Object.getOwnPropertyDescriptor(
+        lowerTagName === 'link' ? HTMLLinkElement.prototype :
+        lowerTagName === 'script' ? HTMLScriptElement.prototype :
+        HTMLMediaElement.prototype,
+        lowerTagName === 'link' ? 'href' : 'src'
+      );
+
+      if (originalSrcDescriptor) {
+        Object.defineProperty(element, lowerTagName === 'link' ? 'href' : 'src', {
+          get: function() {
+            return originalSrcDescriptor.get.call(this);
+          },
+          set: function(value) {
+            originalSrcDescriptor.set.call(this, proxyUrl(value));
+          }
+        });
+      }
+    }
+
+    return element;
+  };
+
+  // 5. Intercept dynamic style changes
+  const originalStyleDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'style');
+  Object.defineProperty(HTMLElement.prototype, 'style', {
+    get: function() {
+      return originalStyleDescriptor.get.call(this);
+    },
+    set: function(value) {
+      if (typeof value === 'string' && value.includes('url(')) {
+        value = value.replace(/url\\(["']?([^"')]*?)["']?/gi, function(match, url) {
+          return 'url("' + proxyUrl(url);
+        });
+      }
+      originalStyleDescriptor.set.call(this, value);
+    }
+  });
+
+  // 6. Intercept CSSStyleSheet.insertRule
+  if (window.CSSStyleSheet && CSSStyleSheet.prototype.insertRule) {
+    const originalInsertRule = CSSStyleSheet.prototype.insertRule;
+    CSSStyleSheet.prototype.insertRule = function(rule, index) {
+      if (rule.includes('url(')) {
+        rule = rule.replace(/url\\(["']?([^"')]*?)["']?/gi, function(match, url) {
+          return 'url("' + proxyUrl(url);
+        });
+      }
+      return originalInsertRule.call(this, rule, index);
+    };
+  }
+
+  console.log('[WebWeb] API interception initialized for:', baseUrl);
 })();
 </script>
 `;

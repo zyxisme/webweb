@@ -64,6 +64,13 @@ webweb/
   - 支持的属性：`src`、`href`、`action`、`srcset`、`poster`
   - 支持的CSS：`url()`、`@import`
   - 自动添加`<base>`标签处理相对路径
+  - **JavaScript API拦截**：自动重写动态加载的资源
+    - `fetch()` API
+    - `XMLHttpRequest`
+    - `Image` 构造函数
+    - `document.createElement()` (script, link, img, video, audio, source, iframe)
+    - 动态样式 `style` 属性
+    - `CSSStyleSheet.insertRule()`
 - `loadPage(iframe, url)`：加载页面到iframe
 - `extractTitle(html)`：从HTML中提取标题
 
@@ -92,7 +99,7 @@ webweb/
 
 ## 技术笔记
 
-- Git推送使用SSH：`git@github.com:zyxisme/webweb.git`（HTTPS认证不可靠）
+- Git推送使用SSH：`git@github.com:zyxisme/webweb.git`（HTTPS认证不可用）
 - Favicon服务：`https://www.google.com/s2/favicons?domain=DOMAIN&sz=32`
 - 使用CORS代理（corsproxy.io）绕过跨域限制
 - 通过fetch获取页面，重写URL后注入iframe（srcdoc）
@@ -107,6 +114,10 @@ webweb/
 - URL重写支持：src/href/action/srcset/poster属性，CSS url()和@import
 - CSS @import必须在CSS url()之前处理，避免双重代理
 - 使用负向后视表达式 `(?<!@import\s)url\(...)` 排除已处理的@import
+- **JavaScript API拦截**：在iframe中注入脚本重写所有网络API
+  - 拦截fetch、XMLHttpRequest、Image、document.createElement等
+  - 动态样式和CSSStyleSheet.insertRule也被拦截
+  - 确保JavaScript动态加载的资源也通过代理
 
 ## 快捷键
 
