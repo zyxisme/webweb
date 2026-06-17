@@ -120,12 +120,15 @@ self.addEventListener('fetch', (event) => {
 
   const originalUrl = getOriginalUrl(url);
   console.log(`[SW] Proxying: ${originalUrl}`);
+  console.log(`[SW] Request mode: ${event.request.mode}`);
 
   event.respondWith(
     fetch(originalUrl, {
       method: event.request.method,
       headers: event.request.headers,
-      body: event.request.body
+      body: event.request.body,
+      mode: 'cors',
+      credentials: 'omit'
     })
     .then(response => {
       // Clone response to modify headers
