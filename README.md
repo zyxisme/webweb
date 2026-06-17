@@ -11,30 +11,18 @@
 - 🌐 完全浏览器行为：无沙箱限制
 - 🎨 现代极简UI：Google风格配色、圆角输入框、平滑过渡
 - ⌨️ 键盘快捷键：Ctrl+T/W/+/-/0
-- 🔗 CORS代理：通过代理绕过跨域限制
-- ⚙️ 代理设置：可配置代理地址、启用/禁用代理
+- 🔗 Service Worker代理：自动绕过跨域限制，无需额外配置
 
 ## 使用方法
 
-### 基本使用
-直接打开 `index.html` 即可使用。
+直接打开 `index.html` 即可使用（需要通过 HTTP 服务器访问，不能直接双击打开）。
 
-### 推荐：启动本地代理服务器（更稳定）
+推荐使用 Python 快速启动：
 ```bash
-node server.js
+python3 -m http.server 8080
 ```
 
-代理服务器支持命令行参数：
-```bash
-node server.js --host <ip> --port <port>
-```
-
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `--host` | 监听IP地址 | `0.0.0.0` |
-| `--port` | 监听端口 | `8088` |
-
-本地代理服务器会自动检测并优先使用，外部代理作为备用。
+然后访问 `http://localhost:8080`。
 
 ## 快捷键
 
@@ -46,41 +34,47 @@ node server.js --host <ip> --port <port>
 | `Ctrl+-` | 缩小 |
 | `Ctrl+0` | 重置缩放 |
 
-## 代理设置
+## 代理系统
 
-点击地址栏右侧的 ⚙ 按钮打开设置：
+WebWeb 使用 Service Worker 实现代理功能，无需启动额外的服务器。
 
-- **启用代理**：通过代理服务器访问网页，绕过跨域限制
-- **禁用代理**：直接访问网页，可能遇到跨域问题
-- **自定义代理地址**：支持任何兼容的CORS代理服务
-- **测试代理**：检查代理连接是否正常
+### 工作原理
 
-### 代理地址格式
+1. Service Worker 拦截 iframe 中的请求
+2. 剔除安全限制头部（X-Frame-Options, CSP 等）
+3. 添加 CORS 头部（Access-Control-Allow-Origin: *）
+4. 返回修改后的响应
 
-| 代理类型 | 地址格式 |
-|----------|----------|
-| 本地代理 | `http://localhost:8088/?url=` |
-| corsproxy.io | `https://corsproxy.io/?` |
-| allorigins | `https://api.allorigins.win/raw?url=` |
+### 优势
+
+- 纯客户端实现，无需 Node.js
+- 无需外部代理服务
+- 自动剔除跨域限制
+- 现代浏览器原生支持
+
+### 限制
+
+- 需要 HTTPS 或 localhost
+- 仅支持现代浏览器
 
 ## 技术栈
 
 - 纯HTML/CSS/JavaScript
+- Service Worker（代理功能）
 - 无依赖，无构建工具
 - localStorage持久化
-- Node.js（可选，用于本地代理服务器）
 
 ## 项目结构
 
 ```
 webweb/
 ├── index.html          # 主页面
-├── server.js           # 本地CORS代理服务器（可选）
+├── sw.js               # Service Worker（代理功能）
 ├── css/
 │   └── style.css       # 样式文件
 ├── js/
 │   ├── storage.js      # localStorage管理
-│   ├── proxy.js        # CORS代理和URL重写
+│   ├── proxy.js        # Service Worker代理管理
 │   ├── tab-manager.js  # 标签页CRUD
 │   ├── zoom.js         # 缩放控制
 │   └── app.js          # 主应用逻辑

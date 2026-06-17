@@ -7,12 +7,12 @@
 ```
 webweb/
 ├── index.html          # 主页面
-├── server.js           # 本地CORS代理服务器（可选）
+├── sw.js               # Service Worker（代理功能）
 ├── css/
 │   └── style.css       # 样式文件
 ├── js/
 │   ├── storage.js      # localStorage管理
-│   ├── proxy.js        # CORS代理和URL重写
+│   ├── proxy.js        # Service Worker代理管理
 │   ├── tab-manager.js  # 标签页CRUD
 │   ├── zoom.js         # 缩放控制
 │   └── app.js          # 主应用逻辑
@@ -40,8 +40,7 @@ webweb/
 8. Favicon显示：标签页显示网站图标
 9. 浏览器标题跟随：标题和favicon实时跟随活跃标签页
 10. 可折叠侧边栏：左侧布局支持折叠，只显示favicon
-11. CORS代理：通过代理绕过跨域限制，地址栏实时跟随页面导航
-12. 代理设置：可配置代理地址、启用/禁用代理、测试代理连接
+11. Service Worker代理：自动绕过跨域限制，无需额外服务器或配置
 
 ## 设计规范
 
@@ -60,25 +59,18 @@ webweb/
 - `getDefaultState()` / `clear()`
 
 ### ProxyManager
-- `corsProxy`：当前使用的代理地址（getter，从设置读取）
-- `isProxyEnabled`：代理是否启用（getter）
-- `init()`：初始化代理管理器，自动检测最佳代理
-- `testProxy()`：测试代理连接，返回可用状态
+- `init()`：注册 Service Worker 并等待激活
+- `buildProxyUrl(url)`：构建代理 URL（`/proxy/ENCODED_URL`）
+- `loadPage(iframe, url)`：通过 Service Worker 代理加载页面到 iframe
+- `testProxy()`：测试代理连接状态
 - `updateSettings(settings)`：更新代理设置
-- `fetchPage(url)`：通过代理获取页面（带fallback机制）
-- `rewriteHtml(html, baseUrl)`：重写HTML中的URL并注入导航追踪
-  - 支持的属性：`src`、`href`、`action`、`srcset`、`poster`
-  - 支持的CSS：`url()`、`@import`
-  - 自动添加`<base>`标签处理相对路径
-  - **JavaScript API拦截**：自动重写动态加载的资源
-    - `fetch()` API
-    - `XMLHttpRequest`
-    - `Image` 构造函数
-    - `document.createElement()` (script, link, img, video, audio, source, iframe)
-    - 动态样式 `style` 属性
-    - `CSSStyleSheet.insertRule()`
-- `loadPage(iframe, url)`：加载页面到iframe
-- `extractTitle(html)`：从HTML中提取标题
+- `extractDomain(url)`：从 URL 提取域名
+
+### Service Worker (sw.js)
+- 拦截 `/proxy/*` 路径的请求
+- 剔除安全限制头部（X-Frame-Options, CSP 等）
+- 添加 CORS 头部（Access-Control-Allow-Origin: *）
+- 处理导航请求（链接点击、表单提交）
 
 ### TabManager
 - `createTab(url)` / `closeTab(tabId)` / `switchTab(tabId)`
@@ -99,60 +91,32 @@ webweb/
 
 - 用户偏好：简洁直接的回复，避免冗长的技术解释
 - 偏好前端方案：优先使用纯JavaScript实现，避免引入服务器依赖
+- Service Worker 代理已取代 Node.js 服务器方案，无需 `server.js`
 
 ## 使用方式
 
-### 基本使用
-双击 `index.html` 即可使用。
+通过 HTTP 服务器访问 `index.html`（Service Worker 需要 HTTPS 或 localhost）。
 
-### 推荐：启动本地代理服务器（更稳定）
+推荐使用 Python 快速启动：
 ```bash
-node server.js
+python3 -m http.server 8080
 ```
 
-代理服务器支持命令行参数：
-```bash
-node server.js --host <ip> --port <port>
-```
-
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `--host` | 监听IP地址 | `0.0.0.0` |
-| `--port` | 监听端口 | `8088` |
-
-示例：
-```bash
-node server.js                              # 监听 0.0.0.0:8088
-node server.js --port 9090                  # 监听 0.0.0.0:9090
-node server.js --host 127.0.0.1             # 监听 127.0.0.1:8088
-node server.js --host 127.0.0.1 --port 9090 # 监听 127.0.0.1:9090
-```
-
-本地代理服务器会自动检测并优先使用，外部代理作为备用。
+然后访问 `http://localhost:8080`。
 
 ## 技术笔记
 
 - Git推送使用SSH：`git@github.com:zyxisme/webweb.git`（HTTPS认证不可用）
 - Favicon服务：`https://www.google.com/s2/favicons?domain=DOMAIN&sz=32`
-- 使用CORS代理绕过跨域限制，支持本地代理和外部代理fallback
-- 通过fetch获取页面，重写URL后注入iframe（srcdoc）
-- 注入脚本拦截链接点击，通过postMessage通知父页面导航
+- **Service Worker代理**：通过 `sw.js` 拦截 `/proxy/*` 请求，剔除安全头部并添加 CORS 头部
+- 代理URL格式：`/proxy/ENCODED_URL`（相对于当前 origin）
+- Service Worker 自动处理导航请求（链接点击、表单提交）
+- iframe 使用 `src` 属性加载代理 URL（非 srcdoc）
 - 地址栏始终在顶部（#address-bar在#main-area外层）
 - 布局类：`.layout-top` / `.layout-left` / `.collapsed` 均在#browser元素上
-- CORS代理URL格式：
-  - 本地代理：`http://localhost:8088/?url=ENCODED_URL`
-  - 外部代理：`https://corsproxy.io/?ENCODED_URL`
-- srcdoc注入时必须在</head>前注入追踪脚本
-- postMessage消息类型：`webweb-navigate`
 - JS加载顺序：storage.js → proxy.js → tab-manager.js → zoom.js → app.js
 - proxy.js必须在tab-manager.js之前加载（TabManager依赖ProxyManager）
-- URL重写支持：src/href/action/srcset/poster属性，CSS url()和@import
-- CSS @import必须在CSS url()之前处理，避免双重代理
-- 使用负向后视表达式 `(?<!@import\s)url\(...)` 排除已处理的@import
-- **JavaScript API拦截**：在iframe中注入脚本重写所有网络API
-  - 拦截fetch、XMLHttpRequest、Image、document.createElement等
-  - 动态样式和CSSStyleSheet.insertRule也被拦截
-  - 确保JavaScript动态加载的资源也通过代理
+- Service Worker 需要 HTTPS 或 localhost 环境
 
 ## 快捷键
 
