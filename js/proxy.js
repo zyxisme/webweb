@@ -58,36 +58,49 @@ const ProxyManager = {
     };
   },
 
-  // Initialize proxy - detect best available proxy
+  // Initialize proxy - register Service Worker
   async init() {
     console.log('[WebWeb] Initializing proxy manager...');
 
-    const state = StorageManager.getState();
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        console.log('[WebWeb] Service Worker registered:', registration.scope);
 
-    // If proxy is disabled, skip initialization
-    if (!state.proxyEnabled) {
-      console.log('[WebWeb] Proxy disabled by user');
-      return null;
-    }
+        // Wait for Service Worker to be active
+        if (registration.installing) {
+          console.log('[WebWeb] Service Worker installing...');
+          await new Promise((resolve) => {
+            registration.installing.addEventListener('statechange', (e) => {
+              if (e.target.state === 'activated') {
+                console.log('[WebWeb] Service Worker activated');
+                resolve();
+              }
+            });
+          });
+        } else if (registration.waiting) {
+          console.log('[WebWeb] Service Worker waiting...');
+          await new Promise((resolve) => {
+            registration.waiting.addEventListener('statechange', (e) => {
+              if (e.target.state === 'activated') {
+                console.log('[WebWeb] Service Worker activated');
+                resolve();
+              }
+            });
+          });
+        }
 
-    // If user has custom proxy URL, use it
-    if (state.proxyUrl) {
-      console.log(`[WebWeb] Using custom proxy: ${state.proxyUrl}`);
-      return state.proxyUrl;
-    }
-
-    // Otherwise, try fallback proxies
-    for (let i = 0; i < this.fallbackProxies.length; i++) {
-      const isAvailable = await this.checkProxy(this.fallbackProxies[i]);
-      if (isAvailable) {
-        this.currentProxyIndex = i;
-        console.log(`[WebWeb] ✓ Using fallback proxy: ${this.fallbackProxies[i]}`);
-        return this.fallbackProxies[i];
+        console.log('[WebWeb] ✓ Service Worker ready');
+        return true;
+      } catch (error) {
+        console.error('[WebWeb] Service Worker registration failed:', error);
+        return false;
       }
+    } else {
+      console.warn('[WebWeb] Service Workers not supported');
+      return false;
     }
-
-    console.warn('[WebWeb] ✗ No proxy available');
-    return null;
   },
 
   // Update proxy settings
