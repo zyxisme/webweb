@@ -7,6 +7,7 @@
 ```
 webweb/
 ├── index.html          # 主页面
+├── server.js           # 本地CORS代理服务器（可选）
 ├── css/
 │   └── style.css       # 样式文件
 ├── js/
@@ -40,6 +41,7 @@ webweb/
 9. 浏览器标题跟随：标题和favicon实时跟随活跃标签页
 10. 可折叠侧边栏：左侧布局支持折叠，只显示favicon
 11. CORS代理：通过代理绕过跨域限制，地址栏实时跟随页面导航
+12. 代理设置：可配置代理地址、启用/禁用代理、测试代理连接
 
 ## 设计规范
 
@@ -58,8 +60,12 @@ webweb/
 - `getDefaultState()` / `clear()`
 
 ### ProxyManager
-- `corsProxy`：CORS代理地址（默认 `https://corsproxy.io/?`）
-- `fetchPage(url)`：通过代理获取页面
+- `corsProxy`：当前使用的代理地址（getter，从设置读取）
+- `isProxyEnabled`：代理是否启用（getter）
+- `init()`：初始化代理管理器，自动检测最佳代理
+- `testProxy()`：测试代理连接，返回可用状态
+- `updateSettings(settings)`：更新代理设置
+- `fetchPage(url)`：通过代理获取页面（带fallback机制）
 - `rewriteHtml(html, baseUrl)`：重写HTML中的URL并注入导航追踪
   - 支持的属性：`src`、`href`、`action`、`srcset`、`poster`
   - 支持的CSS：`url()`、`@import`
@@ -87,6 +93,7 @@ webweb/
 ### App
 - `init()` / `bindEvents()` / `navigateToUrl()`
 - `toggleLayout()` / `applyLayout(layout)` / `restoreLayout()`
+- `openSettings()` / `closeSettings()` / `updateProxySettings()` / `testProxy()`
 
 ## 开发注意事项
 
@@ -95,18 +102,27 @@ webweb/
 
 ## 使用方式
 
-双击 `index.html` 即可使用，无需服务器。
+### 基本使用
+双击 `index.html` 即可使用。
+
+### 推荐：启动本地代理服务器（更稳定）
+```bash
+node server.js
+```
+本地代理服务器会自动检测并优先使用，外部代理作为备用。
 
 ## 技术笔记
 
 - Git推送使用SSH：`git@github.com:zyxisme/webweb.git`（HTTPS认证不可用）
 - Favicon服务：`https://www.google.com/s2/favicons?domain=DOMAIN&sz=32`
-- 使用CORS代理（corsproxy.io）绕过跨域限制
+- 使用CORS代理绕过跨域限制，支持本地代理和外部代理fallback
 - 通过fetch获取页面，重写URL后注入iframe（srcdoc）
 - 注入脚本拦截链接点击，通过postMessage通知父页面导航
 - 地址栏始终在顶部（#address-bar在#main-area外层）
 - 布局类：`.layout-top` / `.layout-left` / `.collapsed` 均在#browser元素上
-- CORS代理URL格式：`https://corsproxy.io/?ENCODED_URL`
+- CORS代理URL格式：
+  - 本地代理：`http://localhost:8088/?url=ENCODED_URL`
+  - 外部代理：`https://corsproxy.io/?ENCODED_URL`
 - srcdoc注入时必须在</head>前注入追踪脚本
 - postMessage消息类型：`webweb-navigate`
 - JS加载顺序：storage.js → proxy.js → tab-manager.js → zoom.js → app.js

@@ -21,6 +21,38 @@
         <button id="zoom-in-btn" title="放大 (Ctrl++)">+</button>
       </div>
       <button id="layout-toggle-btn" title="切换布局">⊞</button>
+      <button id="settings-btn" title="设置">⚙</button>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>设置</h2>
+          <button id="close-settings-btn" class="modal-close">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="settings-section">
+            <h3>代理设置</h3>
+            <div class="setting-item">
+              <label class="setting-label">
+                <input type="checkbox" id="proxy-enabled" checked>
+                <span>启用代理</span>
+              </label>
+              <p class="setting-hint">通过代理服务器访问网页，绕过跨域限制</p>
+            </div>
+            <div class="setting-item">
+              <label class="setting-label" for="proxy-url">代理地址</label>
+              <input type="text" id="proxy-url" class="setting-input" placeholder="http://localhost:8088/?url=">
+              <p class="setting-hint">本地代理: http://localhost:8088/?url=</p>
+            </div>
+            <div class="setting-item">
+              <button id="test-proxy-btn" class="btn-secondary">测试代理</button>
+              <span id="proxy-test-result" class="setting-hint"></span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Main Content Area -->

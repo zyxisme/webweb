@@ -1,7 +1,10 @@
 // js/app.js
 const App = {
   // Initialize application
-  init() {
+  async init() {
+    // Initialize proxy manager first (detect best proxy)
+    await ProxyManager.init();
+
     // Initialize tab manager
     TabManager.init();
 
@@ -17,7 +20,19 @@ const App = {
     // Restore collapsed state
     this.restoreCollapsed();
 
+    // Show proxy status in console
+    this.showProxyStatus();
+
     console.log('WebWeb Browser initialized');
+  },
+
+  // Show current proxy status
+  showProxyStatus() {
+    if (!ProxyManager.isProxyEnabled) {
+      console.log('[WebWeb] 代理已禁用');
+    } else {
+      console.log(`[WebWeb] 当前代理: ${ProxyManager.corsProxy}`);
+    }
   },
 
   // Bind all events
@@ -57,6 +72,38 @@ const App = {
     // Collapse button
     document.getElementById('collapse-btn').addEventListener('click', () => {
       this.toggleCollapsed();
+    });
+
+    // Settings button
+    document.getElementById('settings-btn').addEventListener('click', () => {
+      this.openSettings();
+    });
+
+    // Close settings button
+    document.getElementById('close-settings-btn').addEventListener('click', () => {
+      this.closeSettings();
+    });
+
+    // Settings modal background click
+    document.getElementById('settings-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'settings-modal') {
+        this.closeSettings();
+      }
+    });
+
+    // Proxy enabled checkbox
+    document.getElementById('proxy-enabled').addEventListener('change', (e) => {
+      this.updateProxySettings();
+    });
+
+    // Proxy URL input
+    document.getElementById('proxy-url').addEventListener('change', () => {
+      this.updateProxySettings();
+    });
+
+    // Test proxy button
+    document.getElementById('test-proxy-btn').addEventListener('click', () => {
+      this.testProxy();
     });
 
     // Keyboard shortcuts
@@ -212,6 +259,52 @@ const App = {
   restoreLayout() {
     const state = StorageManager.getState();
     this.applyLayout(state.layout);
+  },
+
+  // Open settings modal
+  openSettings() {
+    const state = StorageManager.getState();
+    document.getElementById('proxy-enabled').checked = state.proxyEnabled !== false;
+    document.getElementById('proxy-url').value = state.proxyUrl || '';
+    document.getElementById('proxy-test-result').textContent = '';
+    document.getElementById('settings-modal').classList.remove('hidden');
+  },
+
+  // Close settings modal
+  closeSettings() {
+    document.getElementById('settings-modal').classList.add('hidden');
+  },
+
+  // Update proxy settings
+  updateProxySettings() {
+    const proxyEnabled = document.getElementById('proxy-enabled').checked;
+    const proxyUrl = document.getElementById('proxy-url').value.trim();
+
+    ProxyManager.updateSettings({
+      proxyEnabled,
+      proxyUrl: proxyUrl || undefined
+    });
+  },
+
+  // Test proxy connection
+  async testProxy() {
+    const resultSpan = document.getElementById('proxy-test-result');
+    resultSpan.textContent = '测试中...';
+    resultSpan.className = 'setting-hint';
+
+    try {
+      const result = await ProxyManager.testProxy();
+      if (result.available) {
+        resultSpan.textContent = '✓ 代理可用';
+        resultSpan.className = 'setting-hint success';
+      } else {
+        resultSpan.textContent = '✗ 代理不可用';
+        resultSpan.className = 'setting-hint error';
+      }
+    } catch (error) {
+      resultSpan.textContent = `✗ 测试失败: ${error.message}`;
+      resultSpan.className = 'setting-hint error';
+    }
   }
 };
 

@@ -9,12 +9,21 @@
 - 🔍 网页缩放：独立缩放级别（0.3x - 3.0x）
 - 💾 状态持久化：localStorage保存所有状态
 - 🌐 完全浏览器行为：无沙箱限制
-- 🎨 极简UI：黑白配色，无圆角，无阴影
+- 🎨 现代极简UI：Google风格配色、圆角输入框、平滑过渡
 - ⌨️ 键盘快捷键：Ctrl+T/W/+/-/0
+- 🔗 CORS代理：通过代理绕过跨域限制
+- ⚙️ 代理设置：可配置代理地址、启用/禁用代理
 
 ## 使用方法
 
-直接打开 `index.html` 即可使用，无需服务器或构建工具。
+### 基本使用
+直接打开 `index.html` 即可使用。
+
+### 推荐：启动本地代理服务器（更稳定）
+```bash
+node server.js
+```
+本地代理服务器会自动检测并优先使用，外部代理作为备用。
 
 ## 快捷键
 
@@ -26,21 +35,41 @@
 | `Ctrl+-` | 缩小 |
 | `Ctrl+0` | 重置缩放 |
 
+## 代理设置
+
+点击地址栏右侧的 ⚙ 按钮打开设置：
+
+- **启用代理**：通过代理服务器访问网页，绕过跨域限制
+- **禁用代理**：直接访问网页，可能遇到跨域问题
+- **自定义代理地址**：支持任何兼容的CORS代理服务
+- **测试代理**：检查代理连接是否正常
+
+### 代理地址格式
+
+| 代理类型 | 地址格式 |
+|----------|----------|
+| 本地代理 | `http://localhost:8088/?url=` |
+| corsproxy.io | `https://corsproxy.io/?` |
+| allorigins | `https://api.allorigins.win/raw?url=` |
+
 ## 技术栈
 
 - 纯HTML/CSS/JavaScript
 - 无依赖，无构建工具
 - localStorage持久化
+- Node.js（可选，用于本地代理服务器）
 
 ## 项目结构
 
 ```
 webweb/
 ├── index.html          # 主页面
+├── server.js           # 本地CORS代理服务器（可选）
 ├── css/
 │   └── style.css       # 样式文件
 ├── js/
 │   ├── storage.js      # localStorage管理
+│   ├── proxy.js        # CORS代理和URL重写
 │   ├── tab-manager.js  # 标签页CRUD
 │   ├── zoom.js         # 缩放控制
 │   └── app.js          # 主应用逻辑
