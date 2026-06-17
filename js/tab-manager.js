@@ -259,25 +259,26 @@ const TabManager = {
     iframe.addEventListener('load', () => {
       try {
         const iframeUrl = iframe.contentWindow.location.href;
-        // Check if it's a proxy URL
-        const proxyMatch = iframeUrl.match(/\/proxy\/(.+)/);
-        if (proxyMatch) {
-          const originalUrl = decodeURIComponent(proxyMatch[1]);
-          if (originalUrl !== tab.url) {
-            console.log(`[WebWeb] Navigation detected: ${tab.url} -> ${originalUrl}`);
+        // Check if it's a proxy URL (has ?url= parameter)
+        const urlObj = new URL(iframeUrl);
+        const originalUrl = urlObj.searchParams.get('url');
+        if (originalUrl) {
+          const decodedUrl = decodeURIComponent(originalUrl);
+          if (decodedUrl !== tab.url) {
+            console.log(`[WebWeb] Navigation detected: ${tab.url} -> ${decodedUrl}`);
             // Update tab URL in state
             const state = StorageManager.getState();
             const stateTab = state.tabs.find(t => t.id === tab.id);
             if (stateTab) {
-              stateTab.url = originalUrl;
+              stateTab.url = decodedUrl;
               StorageManager.setState(state);
             }
             // Update address bar if this is the active tab
             if (state.activeTabId === tab.id) {
-              document.getElementById('url-input').value = originalUrl;
+              document.getElementById('url-input').value = decodedUrl;
             }
             // Update favicon and browser chrome
-            this.updateTabFavicon(tab.id, originalUrl);
+            this.updateTabFavicon(tab.id, decodedUrl);
             this.updateBrowserChrome(stateTab || tab);
           }
         }

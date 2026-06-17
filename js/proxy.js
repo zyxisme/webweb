@@ -48,7 +48,7 @@ const ProxyManager = {
   // Build proxy URL for a given URL
   buildProxyUrl(url) {
     const origin = window.location.origin;
-    return `${origin}/proxy/${encodeURIComponent(url)}`;
+    return `${origin}/?url=${encodeURIComponent(url)}`;
   },
 
   // Load a page into an iframe

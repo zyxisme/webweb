@@ -60,12 +60,12 @@ webweb/
 
 ### ProxyManager
 - `init()`：注册 Service Worker 并等待激活
-- `buildProxyUrl(url)`：构建代理 URL（`/proxy/ENCODED_URL`）
+- `buildProxyUrl(url)`：构建代理 URL（`/?url=ENCODED_URL`）
 - `loadPage(iframe, url)`：通过 Service Worker 代理加载页面到 iframe
 - `extractDomain(url)`：从 URL 提取域名
 
 ### Service Worker (sw.js)
-- 拦截 `/proxy/*` 路径的请求
+- 拦截带有 `?url=` 参数的请求
 - 剔除安全限制头部（X-Frame-Options, CSP 等）
 - 添加 CORS 头部（Access-Control-Allow-Origin: *）
 - 处理导航请求（链接点击、表单提交）
@@ -106,11 +106,11 @@ python3 -m http.server 8080
 
 - Git推送使用SSH：`git@github.com:zyxisme/webweb.git`（HTTPS认证不可用）
 - Favicon服务：`https://www.google.com/s2/favicons?domain=DOMAIN&sz=32`
-- **Service Worker代理**：通过 `sw.js` 拦截 `/proxy/*` 请求，剔除安全头部并添加 CORS 头部
-- 代理URL格式：`/proxy/ENCODED_URL`（相对于当前 origin）
+- **Service Worker代理**：通过 `sw.js` 拦截带有 `?url=` 参数的请求，剔除安全头部并添加 CORS 头部
+- 代理URL格式：`/?url=ENCODED_URL`（查询参数方式，兼容 GitHub Pages）
 - Service Worker 自动处理导航请求（链接点击、表单提交）
 - iframe 使用 `src` 属性加载代理 URL（非 srcdoc）
-- iframe `load` 事件用于同步地址栏（解析 `/proxy/ENCODED_URL` 获取原始 URL）
+- iframe `load` 事件用于同步地址栏（解析 `?url=` 参数获取原始 URL）
 - 地址栏始终在顶部（#address-bar在#main-area外层）
 - 布局类：`.layout-top` / `.layout-left` / `.collapsed` 均在#browser元素上
 - JS加载顺序：storage.js → proxy.js → tab-manager.js → zoom.js → app.js

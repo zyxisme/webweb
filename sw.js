@@ -1,6 +1,6 @@
 // sw.js - Service Worker for WebWeb Browser Proxy
 
-const PROXY_PREFIX = '/proxy/';
+const PROXY_PARAM = 'url';
 
 // Headers to strip from responses
 const HEADERS_TO_STRIP = [
@@ -25,11 +25,12 @@ const CORS_HEADERS = {
 };
 
 /**
- * Check if a URL is a proxy request
+ * Check if a URL is a proxy request (has ?url= parameter)
  */
 function isProxyUrl(url) {
   try {
-    return new URL(url).pathname.startsWith(PROXY_PREFIX);
+    const parsed = new URL(url);
+    return parsed.searchParams.has(PROXY_PARAM);
   } catch { return false; }
 }
 
@@ -38,9 +39,8 @@ function isProxyUrl(url) {
  */
 function getOriginalUrl(url) {
   const parsed = new URL(url);
-  const pathIndex = parsed.pathname.indexOf(PROXY_PREFIX);
-  if (pathIndex === -1) return url;
-  return decodeURIComponent(parsed.pathname.substring(pathIndex + PROXY_PREFIX.length) + parsed.search + parsed.hash);
+  const originalUrl = parsed.searchParams.get(PROXY_PARAM);
+  return originalUrl || url;
 }
 
 /**
@@ -101,7 +101,7 @@ self.addEventListener('fetch', (event) => {
 
         console.log(`[SW] Navigation from proxied page: ${url} -> ${targetUrl}`);
 
-        const proxyUrl = `${self.location.origin}/proxy/${encodeURIComponent(targetUrl)}`;
+        const proxyUrl = `${self.location.origin}/?url=${encodeURIComponent(targetUrl)}`;
         return event.respondWith(Response.redirect(proxyUrl, 302));
       }
 
