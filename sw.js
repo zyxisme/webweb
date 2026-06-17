@@ -76,6 +76,40 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = event.request.url;
 
+  // Handle navigation requests (link clicks, form submissions)
+  if (event.request.mode === 'navigate') {
+    // If it's already a proxy URL, let it be handled below
+    if (isProxyUrl(url)) {
+      // Fall through to proxy handler
+    } else {
+      // For non-proxy navigation requests, check if they come from a proxied page
+      // by examining the referrer header
+      const referrer = event.request.referrer;
+      if (referrer && isProxyUrl(referrer)) {
+        // The navigation came from within a proxied page
+        // Try to navigate the iframe to the new URL through the proxy
+        // This handles link clicks and form submissions within proxied content
+        const referrerOriginal = getOriginalUrl(referrer);
+
+        // Resolve relative URLs against the referrer's original URL
+        let targetUrl;
+        try {
+          targetUrl = new URL(url, referrerOriginal).href;
+        } catch {
+          targetUrl = url;
+        }
+
+        console.log(`[SW] Navigation from proxied page: ${url} -> ${targetUrl}`);
+
+        const proxyUrl = `${self.location.origin}/proxy/${encodeURIComponent(targetUrl)}`;
+        return event.respondWith(Response.redirect(proxyUrl, 302));
+      }
+
+      // Not from a proxied page, let the browser handle it normally
+      return;
+    }
+  }
+
   // Only intercept proxy requests
   if (!isProxyUrl(url)) {
     return;
