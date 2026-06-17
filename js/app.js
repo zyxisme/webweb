@@ -1,7 +1,13 @@
 // js/app.js
 const App = {
+  // Verbose logging flag
+  verboseLogging: false,
+
   // Initialize application
   async init() {
+    // Load verbose logging setting
+    this.verboseLogging = localStorage.getItem('webweb-verbose-logging') === 'true';
+
     // Initialize proxy manager first (detect best proxy)
     await ProxyManager.init();
 
@@ -20,7 +26,14 @@ const App = {
     // Restore collapsed state
     this.restoreCollapsed();
 
-    console.log('WebWeb Browser initialized');
+    this.log('WebWeb Browser initialized');
+  },
+
+  // Log helper - only logs when verbose mode is enabled
+  log(...args) {
+    if (this.verboseLogging) {
+      console.log('[WebWeb]', ...args);
+    }
   },
 
   // Bind all events
@@ -79,6 +92,13 @@ const App = {
       }
     });
 
+    // Verbose logging checkbox
+    document.getElementById('verbose-logging').addEventListener('change', (e) => {
+      this.verboseLogging = e.target.checked;
+      localStorage.setItem('webweb-verbose-logging', this.verboseLogging);
+      this.log('Verbose logging', this.verboseLogging ? 'enabled' : 'disabled');
+    });
+
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
       // Ctrl+T: New tab
@@ -134,6 +154,8 @@ const App = {
       url = 'https://' + url;
     }
 
+    this.log('Navigating to:', url);
+
     const activeTab = TabManager.getActiveTab();
     if (activeTab) {
       const iframe = document.getElementById('iframe-' + activeTab.id);
@@ -147,10 +169,12 @@ const App = {
         }
 
         // Load through proxy
+        this.log('Loading page through proxy...');
         const result = await ProxyManager.loadPage(iframe, url);
 
         // Update title and favicon
         if (result.title) {
+          this.log('Page title:', result.title);
           TabManager.updateTabTitle(activeTab.id, result.title);
         } else {
           TabManager.updateTabTitle(activeTab.id, url);
@@ -227,6 +251,8 @@ const App = {
 
   // Open settings modal
   openSettings() {
+    // Restore verbose logging checkbox state
+    document.getElementById('verbose-logging').checked = this.verboseLogging;
     document.getElementById('settings-modal').classList.remove('hidden');
   },
 

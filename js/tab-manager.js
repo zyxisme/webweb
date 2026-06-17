@@ -1,5 +1,12 @@
 // js/tab-manager.js
 const TabManager = {
+  // Log helper - checks App.verboseLogging if available
+  log(...args) {
+    if (typeof App !== 'undefined' && App.verboseLogging) {
+      console.log('[WebWeb]', ...args);
+    }
+  },
+
   // Generate unique ID
   generateId() {
     return 'tab_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -265,7 +272,7 @@ const TabManager = {
         if (originalUrl) {
           const decodedUrl = decodeURIComponent(originalUrl);
           if (decodedUrl !== tab.url) {
-            console.log(`[WebWeb] Navigation detected: ${tab.url} -> ${decodedUrl}`);
+            this.log('Navigation detected:', tab.url, '->', decodedUrl);
             // Update tab URL in state
             const state = StorageManager.getState();
             const stateTab = state.tabs.find(t => t.id === tab.id);

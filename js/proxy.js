@@ -1,39 +1,46 @@
 // js/proxy.js
 const ProxyManager = {
+  // Log helper - checks App.verboseLogging if available
+  log(...args) {
+    if (typeof App !== 'undefined' && App.verboseLogging) {
+      console.log('[WebWeb]', ...args);
+    }
+  },
+
   // Initialize proxy - register Service Worker
   async init() {
-    console.log('[WebWeb] Initializing proxy manager...');
+    this.log('Initializing proxy manager...');
 
     // Register Service Worker
     if ('serviceWorker' in navigator) {
       try {
         const registration = await navigator.serviceWorker.register('/sw.js');
-        console.log('[WebWeb] Service Worker registered:', registration.scope);
+        this.log('Service Worker registered:', registration.scope);
 
         // Wait for Service Worker to be active
         if (registration.installing) {
-          console.log('[WebWeb] Service Worker installing...');
+          this.log('Service Worker installing...');
           await new Promise((resolve) => {
             registration.installing.addEventListener('statechange', (e) => {
               if (e.target.state === 'activated') {
-                console.log('[WebWeb] Service Worker activated');
+                this.log('Service Worker activated');
                 resolve();
               }
             });
           });
         } else if (registration.waiting) {
-          console.log('[WebWeb] Service Worker waiting...');
+          this.log('Service Worker waiting...');
           await new Promise((resolve) => {
             registration.waiting.addEventListener('statechange', (e) => {
               if (e.target.state === 'activated') {
-                console.log('[WebWeb] Service Worker activated');
+                this.log('Service Worker activated');
                 resolve();
               }
             });
           });
         }
 
-        console.log('[WebWeb] ✓ Service Worker ready');
+        this.log('✓ Service Worker ready');
         return true;
       } catch (error) {
         console.error('[WebWeb] Service Worker registration failed:', error);
@@ -54,10 +61,11 @@ const ProxyManager = {
   // Load a page into an iframe
   async loadPage(iframe, url) {
     try {
-      console.log(`[WebWeb] Loading page: ${url}`);
+      this.log('Loading page:', url);
 
       // Build proxy URL
       const proxyUrl = this.buildProxyUrl(url);
+      this.log('Proxy URL:', proxyUrl);
 
       // Set iframe src instead of srcdoc
       iframe.src = proxyUrl;
@@ -65,7 +73,7 @@ const ProxyManager = {
       // Extract domain as title (will be updated when page loads)
       const title = this.extractDomain(url);
 
-      console.log(`[WebWeb] ✓ Page loading: ${url}`);
+      this.log('✓ Page loading:', url);
       return { success: true, title };
     } catch (error) {
       console.error('[WebWeb] Failed to load page:', error);
