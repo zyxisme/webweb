@@ -101,7 +101,10 @@ self.addEventListener('fetch', (event) => {
 
         console.log(`[SW] Navigation from proxied page: ${url} -> ${targetUrl}`);
 
-        const proxyUrl = `${self.location.origin}/?url=${encodeURIComponent(targetUrl)}`;
+        // Get base path from the referrer URL (works for GitHub Pages)
+        const referrerUrl = new URL(referrer);
+        const basePath = referrerUrl.pathname.replace(/\/[^\/]*$/, '/');
+        const proxyUrl = `${self.location.origin}${basePath}?url=${encodeURIComponent(targetUrl)}`;
         return event.respondWith(Response.redirect(proxyUrl, 302));
       }
 

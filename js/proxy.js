@@ -7,7 +7,12 @@ const ProxyManager = {
     // Register Service Worker
     if ('serviceWorker' in navigator) {
       try {
-        const registration = await navigator.serviceWorker.register('/sw.js');
+        // Get base path for GitHub Pages compatibility
+        const basePath = window.location.pathname.replace(/\/[^\/]*$/, '/');
+        const swPath = basePath + 'sw.js';
+        App.log('Registering Service Worker from:', swPath);
+
+        const registration = await navigator.serviceWorker.register(swPath);
         App.log('Service Worker registered:', registration.scope);
 
         // Wait for Service Worker to be active
@@ -47,8 +52,10 @@ const ProxyManager = {
 
   // Build proxy URL for a given URL
   buildProxyUrl(url) {
+    // Get base path (e.g., /webweb/ for GitHub Pages)
+    const basePath = window.location.pathname.replace(/\/[^\/]*$/, '/');
     const origin = window.location.origin;
-    return `${origin}/?url=${encodeURIComponent(url)}`;
+    return `${origin}${basePath}?url=${encodeURIComponent(url)}`;
   },
 
   // Load a page into an iframe
