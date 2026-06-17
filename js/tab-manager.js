@@ -5,6 +5,48 @@ const TabManager = {
     return 'tab_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   },
 
+  // Get favicon URL for a given page URL
+  getFaviconUrl(url) {
+    if (!url || url === 'about:blank') return null;
+    try {
+      const urlObj = new URL(url.startsWith('http') ? url : 'https://' + url);
+      return 'https://www.google.com/s2/favicons?domain=' + urlObj.hostname + '&sz=32';
+    } catch (e) {
+      return null;
+    }
+  },
+
+  // Update tab favicon in state and UI
+  updateTabFavicon(tabId, url) {
+    const state = StorageManager.getState();
+    const tab = state.tabs.find(t => t.id === tabId);
+    if (!tab) return;
+
+    const faviconUrl = this.getFaviconUrl(url);
+    if (faviconUrl) {
+      tab.favicon = faviconUrl;
+      StorageManager.setState(state);
+
+      // Update UI
+      const tabEl = document.querySelector(`.tab[data-id="${tabId}"]`);
+      if (tabEl) {
+        const existingFavicon = tabEl.querySelector('.tab-favicon, .tab-favicon-fallback');
+        if (existingFavicon) existingFavicon.remove();
+
+        const faviconEl = document.createElement('img');
+        faviconEl.className = 'tab-favicon';
+        faviconEl.src = faviconUrl;
+        faviconEl.onerror = () => {
+          const fallback = document.createElement('div');
+          fallback.className = 'tab-favicon-fallback';
+          fallback.textContent = '🌐';
+          faviconEl.replaceWith(fallback);
+        };
+        tabEl.prepend(faviconEl);
+      }
+    }
+  },
+
   // Create new tab
   createTab(url = 'about:blank') {
     const state = StorageManager.getState();
@@ -12,7 +54,8 @@ const TabManager = {
       id: this.generateId(),
       title: '新标签页',
       url: url,
-      zoom: 1.0
+      zoom: 1.0,
+      favicon: null
     };
 
     state.tabs.push(newTab);
@@ -22,6 +65,11 @@ const TabManager = {
     this.renderTabs();
     this.createIframe(newTab);
     this.switchTab(newTab.id);
+
+    // Update favicon
+    if (url !== 'about:blank') {
+      this.updateTabFavicon(newTab.id, url);
+    }
 
     return newTab;
   },
@@ -89,11 +137,8 @@ const TabManager = {
       activeTabEl.classList.add('active');
     }
 
-    // Update address bar
-    const urlInput = document.getElementById('url-input');
-    if (urlInput) {
-      urlInput.value = tab.url === 'about:blank' ? '' : tab.url;
-    }
+    // Update address bar with actual URL
+    this.updateAddressBar(tab);
 
     // Update zoom display
     if (typeof ZoomManager !== 'undefined') {
@@ -101,6 +146,15 @@ const TabManager = {
     }
 
     return true;
+  },
+
+  // Update address bar to show current tab's URL
+  updateAddressBar(tab) {
+    const urlInput = document.getElementById('url-input');
+    if (urlInput) {
+      const displayUrl = (tab.url === 'about:blank') ? '' : tab.url;
+      urlInput.value = displayUrl;
+    }
   },
 
   // Update tab URL
@@ -118,6 +172,9 @@ const TabManager = {
     if (iframe) {
       iframe.src = url;
     }
+
+    // Update favicon
+    this.updateTabFavicon(tabId, url);
 
     return true;
   },
@@ -166,15 +223,39 @@ const TabManager = {
 
     contentArea.appendChild(iframe);
 
-    // Listen for iframe load to get title
+    // Listen for iframe load to get title and update URL
     iframe.addEventListener('load', () => {
+      // Update tab title
       try {
         const title = iframe.contentDocument?.title;
         if (title) {
           this.updateTabTitle(tab.id, title);
         }
       } catch (e) {
-        // Cross-origin restriction, cannot get title
+        // Cross-origin restriction
+      }
+
+      // Update URL to reflect actual navigation
+      try {
+        const currentUrl = iframe.contentWindow?.location?.href;
+        if (currentUrl && currentUrl !== 'about:blank') {
+          const state = StorageManager.getState();
+          const tabData = state.tabs.find(t => t.id === tab.id);
+          if (tabData && tabData.url !== currentUrl) {
+            tabData.url = currentUrl;
+            StorageManager.setState(state);
+
+            // Update address bar if this is the active tab
+            if (state.activeTabId === tab.id) {
+              this.updateAddressBar(tabData);
+            }
+
+            // Update favicon
+            this.updateTabFavicon(tab.id, currentUrl);
+          }
+        }
+      } catch (e) {
+        // Cross-origin restriction, use stored URL
       }
     });
 
@@ -191,6 +272,34 @@ const TabManager = {
       const tabEl = document.createElement('div');
       tabEl.className = 'tab' + (tab.id === state.activeTabId ? ' active' : '');
       tabEl.dataset.id = tab.id;
+
+      // Favicon
+      if (tab.favicon) {
+        const faviconEl = document.createElement('img');
+        faviconEl.className = 'tab-favicon';
+        faviconEl.src = tab.favicon;
+        faviconEl.onerror = () => {
+          const fallback = document.createElement('div');
+          fallback.className = 'tab-favicon-fallback';
+          fallback.textContent = '🌐';
+          faviconEl.replaceWith(fallback);
+        };
+        tabEl.appendChild(faviconEl);
+      } else if (tab.url && tab.url !== 'about:blank') {
+        const faviconUrl = this.getFaviconUrl(tab.url);
+        if (faviconUrl) {
+          const faviconEl = document.createElement('img');
+          faviconEl.className = 'tab-favicon';
+          faviconEl.src = faviconUrl;
+          faviconEl.onerror = () => {
+            const fallback = document.createElement('div');
+            fallback.className = 'tab-favicon-fallback';
+            fallback.textContent = '🌐';
+            faviconEl.replaceWith(fallback);
+          };
+          tabEl.appendChild(faviconEl);
+        }
+      }
 
       const titleEl = document.createElement('span');
       titleEl.className = 'tab-title';

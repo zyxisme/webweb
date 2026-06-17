@@ -8,6 +8,7 @@ const StorageManager = {
       tabs: [],
       activeTabId: null,
       layout: 'top',
+      collapsed: false,
       globalZoom: 1.0
     };
   },

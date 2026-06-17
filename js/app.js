@@ -14,6 +14,9 @@ const App = {
     // Restore layout
     this.restoreLayout();
 
+    // Restore collapsed state
+    this.restoreCollapsed();
+
     console.log('WebWeb Browser initialized');
   },
 
@@ -49,6 +52,11 @@ const App = {
     // Layout toggle button
     document.getElementById('layout-toggle-btn').addEventListener('click', () => {
       this.toggleLayout();
+    });
+
+    // Collapse button
+    document.getElementById('collapse-btn').addEventListener('click', () => {
+      this.toggleCollapsed();
     });
 
     // Keyboard shortcuts
@@ -90,7 +98,7 @@ const App = {
 
     // Save state before page unload
     window.addEventListener('beforeunload', () => {
-      // State is already saved in each operation, cleanup can be done here
+      // State is already saved in each operation
     });
   },
 
@@ -126,11 +134,49 @@ const App = {
   // Apply layout
   applyLayout(layout) {
     const browser = document.getElementById('browser');
-    browser.className = 'layout-' + layout;
+
+    // Clear layout classes
+    browser.classList.remove('layout-top', 'layout-left');
+    browser.classList.add('layout-' + layout);
 
     // Update layout toggle button icon
     const toggleBtn = document.getElementById('layout-toggle-btn');
     toggleBtn.textContent = layout === 'top' ? '⊟' : '⊞';
+
+    // Show/hide collapse button based on layout
+    const collapseBtn = document.getElementById('collapse-btn');
+    collapseBtn.style.display = layout === 'left' ? 'flex' : 'none';
+
+    // Restore collapsed state for left layout
+    if (layout === 'left') {
+      const state = StorageManager.getState();
+      if (state.collapsed) {
+        browser.classList.add('collapsed');
+      }
+    }
+  },
+
+  // Toggle collapsed state (only for left layout)
+  toggleCollapsed() {
+    const state = StorageManager.getState();
+    const browser = document.getElementById('browser');
+
+    state.collapsed = !state.collapsed;
+    StorageManager.setState(state);
+
+    if (state.collapsed) {
+      browser.classList.add('collapsed');
+    } else {
+      browser.classList.remove('collapsed');
+    }
+  },
+
+  // Restore collapsed state
+  restoreCollapsed() {
+    const state = StorageManager.getState();
+    if (state.layout === 'left' && state.collapsed) {
+      document.getElementById('browser').classList.add('collapsed');
+    }
   },
 
   // Restore layout
