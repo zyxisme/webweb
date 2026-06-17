@@ -91,21 +91,6 @@ const App = {
       }
     });
 
-    // Proxy enabled checkbox
-    document.getElementById('proxy-enabled').addEventListener('change', (e) => {
-      this.updateProxySettings();
-    });
-
-    // Proxy URL input
-    document.getElementById('proxy-url').addEventListener('change', () => {
-      this.updateProxySettings();
-    });
-
-    // Test proxy button
-    document.getElementById('test-proxy-btn').addEventListener('click', () => {
-      this.testProxy();
-    });
-
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
       // Ctrl+T: New tab
@@ -263,48 +248,12 @@ const App = {
 
   // Open settings modal
   openSettings() {
-    const state = StorageManager.getState();
-    document.getElementById('proxy-enabled').checked = state.proxyEnabled !== false;
-    document.getElementById('proxy-url').value = state.proxyUrl || '';
-    document.getElementById('proxy-test-result').textContent = '';
     document.getElementById('settings-modal').classList.remove('hidden');
   },
 
   // Close settings modal
   closeSettings() {
     document.getElementById('settings-modal').classList.add('hidden');
-  },
-
-  // Update proxy settings
-  updateProxySettings() {
-    const proxyEnabled = document.getElementById('proxy-enabled').checked;
-    const proxyUrl = document.getElementById('proxy-url').value.trim();
-
-    ProxyManager.updateSettings({
-      proxyEnabled,
-      proxyUrl: proxyUrl || undefined
-    });
-  },
-
-  // Test proxy connection
-  async testProxy() {
-    const resultSpan = document.getElementById('proxy-test-result');
-    resultSpan.textContent = '测试中...';
-    resultSpan.className = 'setting-hint';
-
-    try {
-      const result = await ProxyManager.testProxy();
-      if (result.available) {
-        resultSpan.textContent = '✓ 代理可用';
-        resultSpan.className = 'setting-hint success';
-      } else {
-        resultSpan.textContent = '✗ 代理不可用';
-        resultSpan.className = 'setting-hint error';
-      }
-    } catch (error) {
-      resultSpan.textContent = `✗ 测试失败: ${error.message}`;
-      resultSpan.className = 'setting-hint error';
-    }
   }
 };
 
