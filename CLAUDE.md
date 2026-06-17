@@ -62,8 +62,6 @@ webweb/
 - `init()`：注册 Service Worker 并等待激活
 - `buildProxyUrl(url)`：构建代理 URL（`/proxy/ENCODED_URL`）
 - `loadPage(iframe, url)`：通过 Service Worker 代理加载页面到 iframe
-- `testProxy()`：测试代理连接状态
-- `updateSettings(settings)`：更新代理设置
 - `extractDomain(url)`：从 URL 提取域名
 
 ### Service Worker (sw.js)
