@@ -255,6 +255,37 @@ const TabManager = {
 
     contentArea.appendChild(iframe);
 
+    // Track navigation within the iframe to sync address bar
+    iframe.addEventListener('load', () => {
+      try {
+        const iframeUrl = iframe.contentWindow.location.href;
+        // Check if it's a proxy URL
+        const proxyMatch = iframeUrl.match(/\/proxy\/(.+)/);
+        if (proxyMatch) {
+          const originalUrl = decodeURIComponent(proxyMatch[1]);
+          if (originalUrl !== tab.url) {
+            console.log(`[WebWeb] Navigation detected: ${tab.url} -> ${originalUrl}`);
+            // Update tab URL in state
+            const state = StorageManager.getState();
+            const stateTab = state.tabs.find(t => t.id === tab.id);
+            if (stateTab) {
+              stateTab.url = originalUrl;
+              StorageManager.setState(state);
+            }
+            // Update address bar if this is the active tab
+            if (state.activeTabId === tab.id) {
+              document.getElementById('url-input').value = originalUrl;
+            }
+            // Update favicon and browser chrome
+            this.updateTabFavicon(tab.id, originalUrl);
+            this.updateBrowserChrome(stateTab || tab);
+          }
+        }
+      } catch (e) {
+        // Cross-origin or other access error - ignore
+      }
+    });
+
     // Load through proxy if it's a real URL
     if (tab.url && tab.url !== 'about:blank') {
       ProxyManager.loadPage(iframe, tab.url).then(result => {

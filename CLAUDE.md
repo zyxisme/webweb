@@ -25,7 +25,7 @@ webweb/
 ## 技术栈
 
 - 纯HTML/CSS/JavaScript
-- 无构建工具，双击index.html直接使用
+- 无构建工具，需要通过 HTTP 服务器访问（Service Worker 要求）
 - localStorage持久化状态
 
 ## 核心功能
@@ -85,7 +85,7 @@ webweb/
 ### App
 - `init()` / `bindEvents()` / `navigateToUrl()`
 - `toggleLayout()` / `applyLayout(layout)` / `restoreLayout()`
-- `openSettings()` / `closeSettings()` / `updateProxySettings()` / `testProxy()`
+- `openSettings()` / `closeSettings()`
 
 ## 开发注意事项
 
@@ -112,6 +112,7 @@ python3 -m http.server 8080
 - 代理URL格式：`/proxy/ENCODED_URL`（相对于当前 origin）
 - Service Worker 自动处理导航请求（链接点击、表单提交）
 - iframe 使用 `src` 属性加载代理 URL（非 srcdoc）
+- iframe `load` 事件用于同步地址栏（解析 `/proxy/ENCODED_URL` 获取原始 URL）
 - 地址栏始终在顶部（#address-bar在#main-area外层）
 - 布局类：`.layout-top` / `.layout-left` / `.collapsed` 均在#browser元素上
 - JS加载顺序：storage.js → proxy.js → tab-manager.js → zoom.js → app.js

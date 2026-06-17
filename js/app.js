@@ -128,15 +128,6 @@ const App = {
       }
     });
 
-    // Listen for navigation messages from iframes (proxy mode)
-    window.addEventListener('message', (e) => {
-      if (e.data && e.data.type === 'webweb-navigate') {
-        const url = e.data.url;
-        document.getElementById('url-input').value = url;
-        this.navigateToUrl();
-      }
-    });
-
     // Save state before page unload
     window.addEventListener('beforeunload', () => {
       // State is already saved in each operation
