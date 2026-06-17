@@ -140,6 +140,9 @@ const TabManager = {
     // Update address bar with actual URL
     this.updateAddressBar(tab);
 
+    // Update browser title and favicon
+    this.updateBrowserChrome(tab);
+
     // Update zoom display
     if (typeof ZoomManager !== 'undefined') {
       ZoomManager.updateZoomDisplay(tab.zoom);
@@ -154,6 +157,28 @@ const TabManager = {
     if (urlInput) {
       const displayUrl = (tab.url === 'about:blank') ? '' : tab.url;
       urlInput.value = displayUrl;
+    }
+  },
+
+  // Update browser chrome (title + favicon) to match active tab
+  updateBrowserChrome(tab) {
+    if (!tab) return;
+
+    // Update document title
+    const displayTitle = (tab.title && tab.title !== '新标签页')
+      ? tab.title + ' — WebWeb'
+      : 'WebWeb Browser';
+    document.title = displayTitle;
+
+    // Update favicon
+    const faviconEl = document.getElementById('favicon');
+    if (faviconEl) {
+      if (tab.favicon) {
+        faviconEl.href = tab.favicon;
+      } else if (tab.url && tab.url !== 'about:blank') {
+        const faviconUrl = this.getFaviconUrl(tab.url);
+        if (faviconUrl) faviconEl.href = faviconUrl;
+      }
     }
   },
 
@@ -195,6 +220,11 @@ const TabManager = {
       tabEl.textContent = title;
     }
 
+    // Update browser chrome if this is the active tab
+    if (state.activeTabId === tabId) {
+      this.updateBrowserChrome(tab);
+    }
+
     return true;
   },
 
@@ -225,11 +255,14 @@ const TabManager = {
 
     // Listen for iframe load to get title and update URL
     iframe.addEventListener('load', () => {
-      // Update tab title
+      let titleUpdated = false;
+
+      // Try to get title from iframe (same-origin only)
       try {
         const title = iframe.contentDocument?.title;
         if (title) {
           this.updateTabTitle(tab.id, title);
+          titleUpdated = true;
         }
       } catch (e) {
         // Cross-origin restriction
@@ -256,6 +289,32 @@ const TabManager = {
         }
       } catch (e) {
         // Cross-origin restriction, use stored URL
+      }
+
+      // For cross-origin pages where we can't read the title, use hostname as fallback
+      if (!titleUpdated) {
+        const state = StorageManager.getState();
+        const tabData = state.tabs.find(t => t.id === tab.id);
+        if (tabData && tabData.url && tabData.url !== 'about:blank') {
+          try {
+            const urlObj = new URL(tabData.url.startsWith('http') ? tabData.url : 'https://' + tabData.url);
+            const hostname = urlObj.hostname;
+            if (tabData.title === '新标签页' || tabData.title === tabData.url) {
+              this.updateTabTitle(tab.id, hostname);
+            }
+          } catch (e) {
+            // Invalid URL
+          }
+        }
+      }
+
+      // Update browser chrome if this is the active tab
+      const state = StorageManager.getState();
+      if (state.activeTabId === tab.id) {
+        const tabData = state.tabs.find(t => t.id === tab.id);
+        if (tabData) {
+          this.updateBrowserChrome(tabData);
+        }
       }
     });
 
