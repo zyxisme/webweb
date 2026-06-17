@@ -11,15 +11,22 @@ const ProxyManager = {
         const basePath = window.location.pathname.replace(/\/[^\/]*$/, '/');
         const swPath = basePath + 'sw.js';
         App.log('Registering Service Worker from:', swPath);
+        App.log('Current location:', window.location.href);
 
         const registration = await navigator.serviceWorker.register(swPath);
-        App.log('Service Worker registered:', registration.scope);
+        App.log('Service Worker registered, scope:', registration.scope);
+        App.log('Registration active:', !!registration.active);
+        App.log('Registration installing:', !!registration.installing);
+        App.log('Registration waiting:', !!registration.waiting);
 
         // Wait for Service Worker to be active
+        let sw = registration.active || registration.installing || registration.waiting;
+
         if (registration.installing) {
           App.log('Service Worker installing...');
           await new Promise((resolve) => {
             registration.installing.addEventListener('statechange', (e) => {
+              App.log('SW state changed to:', e.target.state);
               if (e.target.state === 'activated') {
                 App.log('Service Worker activated');
                 resolve();
@@ -30,12 +37,19 @@ const ProxyManager = {
           App.log('Service Worker waiting...');
           await new Promise((resolve) => {
             registration.waiting.addEventListener('statechange', (e) => {
+              App.log('SW state changed to:', e.target.state);
               if (e.target.state === 'activated') {
                 App.log('Service Worker activated');
                 resolve();
               }
             });
           });
+        }
+
+        // Verify Service Worker is controlling the page
+        App.log('Navigator service worker controller:', !!navigator.serviceWorker.controller);
+        if (navigator.serviceWorker.controller) {
+          App.log('Controller script URL:', navigator.serviceWorker.controller.scriptURL);
         }
 
         App.log('✓ Service Worker ready');
