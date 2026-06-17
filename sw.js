@@ -128,9 +128,8 @@ self.addEventListener('fetch', (event) => {
     fetch(originalUrl, {
       method: event.request.method,
       headers: event.request.headers,
-      body: event.request.body,
-      mode: 'cors',
-      credentials: 'omit'
+      body: event.request.body
+      // Don't set mode: 'cors' - it forces CORS enforcement on target servers
     })
     .then(response => {
       // Clone response to modify headers
