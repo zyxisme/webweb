@@ -33,16 +33,20 @@ webweb/
 3. 网页缩放：独立缩放级别（0.3x - 3.0x）
 4. 状态持久化：localStorage保存所有状态
 5. 完全浏览器行为：无沙箱限制
-6. 极简UI：黑白配色，无圆角，无阴影
+6. 现代极简UI：Google风格配色、圆角输入框、平滑过渡
 7. 键盘快捷键：Ctrl+T/W/+/-/0
+8. Favicon显示：标签页显示网站图标
+9. 浏览器标题跟随：标题和favicon实时跟随活跃标签页
+10. 可折叠侧边栏：左侧布局支持折叠，只显示favicon
 
 ## 设计规范
 
-- 颜色：纯黑(#000)、纯白(#fff)、浅灰(#f5f5f5)、深灰(#333)
-- 圆角：无，全部直角
-- 边框：1px solid #ccc
-- 字体：系统默认字体
-- 阴影：无
+- 颜色：Google风格（#202124文字、#5f6368次要、#1a73e8强调、#f8f9fa背景）
+- 圆角：输入框20px、按钮6px、标签6px
+- 边框：1px solid #dadce0
+- 字体：system-ui, -apple-system, sans-serif
+- 阴影：无（仅输入框聚焦时有蓝色边框）
+- 过渡动画：0.15s ease（快速）、0.25s ease（常规）
 
 ## 模块接口
 
@@ -54,6 +58,7 @@ webweb/
 ### TabManager
 - `createTab(url)` / `closeTab(tabId)` / `switchTab(tabId)`
 - `updateTabUrl(tabId, url)` / `updateTabTitle(tabId, title)`
+- `updateBrowserChrome(tab)` / `updateTabFavicon(tabId, url)`
 - `getActiveTab()` / `getAllTabs()` / `renderTabs()`
 
 ### ZoomManager
@@ -67,6 +72,14 @@ webweb/
 ## 使用方式
 
 双击 `index.html` 即可使用，无需服务器。
+
+## 技术笔记
+
+- Git推送使用SSH：`git@github.com:zyxisme/webweb.git`（HTTPS认证不可靠）
+- Favicon服务：`https://www.google.com/s2/favicons?domain=DOMAIN&sz=32`
+- 跨域iframe无法读取title/URL，回退使用hostname作为标题
+- 地址栏始终在顶部（#address-bar在#main-area外层）
+- 布局类：`.layout-top` / `.layout-left` / `.collapsed` 均在#browser元素上
 
 ## 快捷键
 
