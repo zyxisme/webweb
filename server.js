@@ -1,11 +1,48 @@
 // server.js - Local CORS proxy server for WebWeb Browser
-// Usage: node server.js [port]
-// Default port: 8088
+// Usage: node server.js [--host <ip>] [--port <port>]
+// Default: 0.0.0.0:8088
 
 const http = require('http');
 const https = require('https');
 
-const PORT = process.argv[2] || 8088;
+// Parse command line arguments
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const config = {
+    host: '0.0.0.0',
+    port: 8088
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--host' && args[i + 1]) {
+      config.host = args[++i];
+    } else if (args[i] === '--port' && args[i + 1]) {
+      config.port = parseInt(args[++i], 10);
+    } else if (args[i] === '--help' || args[i] === '-h') {
+      console.log(`
+WebWeb CORS Proxy Server
+
+Usage: node server.js [options]
+
+Options:
+  --host <ip>    Listen IP address (default: 0.0.0.0)
+  --port <port>  Listen port (default: 8088)
+  -h, --help     Show this help message
+
+Examples:
+  node server.js                         # Listen on 0.0.0.0:8088
+  node server.js --port 9090             # Listen on 0.0.0.0:9090
+  node server.js --host 127.0.0.1        # Listen on 127.0.0.1:8088
+  node server.js --host 127.0.0.1 --port 9090  # Listen on 127.0.0.1:9090
+      `);
+      process.exit(0);
+    }
+  }
+
+  return config;
+}
+
+const config = parseArgs();
 
 // CORS headers to add to all responses
 const CORS_HEADERS = {
@@ -78,7 +115,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Parse request URL using WHATWG URL API
-  const reqUrl = new URL(req.url, `http://localhost:${PORT}`);
+  const reqUrl = new URL(req.url, `http://${config.host}:${config.port}`);
   const parsedReqUrl = {
     pathname: reqUrl.pathname,
     query: Object.fromEntries(reqUrl.searchParams)
@@ -95,13 +132,14 @@ const server = http.createServer(async (req, res) => {
   let targetUrl = null;
 
   if (parsedReqUrl.query.url) {
-    // Format: http://localhost:8080/?url=https%3A%2F%2Fexample.com
+    // Format: http://localhost:8088/?url=https%3A%2F%2Fexample.com
     targetUrl = parsedReqUrl.query.url;
   } else if (parsedReqUrl.pathname.startsWith('/proxy/')) {
-    // Format: http://localhost:8080/proxy/https://example.com
+    // Format: http://localhost:8088/proxy/https://example.com
     targetUrl = decodeURIComponent(parsedReqUrl.pathname.slice(7));
   } else if (parsedReqUrl.pathname === '/' && !parsedReqUrl.query.url) {
     // Root without URL - show usage
+    const displayHost = config.host === '0.0.0.0' ? 'localhost' : config.host;
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', ...CORS_HEADERS });
     res.end(`
       <!DOCTYPE html>
@@ -110,8 +148,8 @@ const server = http.createServer(async (req, res) => {
       <body style="font-family: system-ui; padding: 40px; text-align: center;">
         <h1>WebWeb CORS Proxy Server</h1>
         <p>代理服务器运行正常 ✓</p>
-        <p>使用方法: <code>http://localhost:${PORT}/?url=ENCODED_URL</code></p>
-        <p>或: <code>http://localhost:${PORT}/proxy/URL</code></p>
+        <p>使用方法: <code>http://${displayHost}:${config.port}/?url=ENCODED_URL</code></p>
+        <p>或: <code>http://${displayHost}:${config.port}/proxy/URL</code></p>
       </body>
       </html>
     `);
@@ -159,12 +197,14 @@ const server = http.createServer(async (req, res) => {
 });
 
 // Start server
-server.listen(PORT, () => {
+server.listen(config.port, config.host, () => {
+  const displayHost = config.host === '0.0.0.0' ? '0.0.0.0 (all interfaces)' : config.host;
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║           WebWeb CORS Proxy Server Started                ║
 ╠═══════════════════════════════════════════════════════════╣
-║  Address: http://localhost:${PORT}                        ║
+║  Host:    ${displayHost.padEnd(47)}║
+║  Port:    ${String(config.port).padEnd(47)}║
 ║                                                           ║
 ║  代理服务器已启动，WebWeb 会自动检测并使用                ║
 ║                                                           ║

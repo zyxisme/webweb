@@ -109,6 +109,25 @@ webweb/
 ```bash
 node server.js
 ```
+
+代理服务器支持命令行参数：
+```bash
+node server.js --host <ip> --port <port>
+```
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--host` | 监听IP地址 | `0.0.0.0` |
+| `--port` | 监听端口 | `8088` |
+
+示例：
+```bash
+node server.js                              # 监听 0.0.0.0:8088
+node server.js --port 9090                  # 监听 0.0.0.0:9090
+node server.js --host 127.0.0.1             # 监听 127.0.0.1:8088
+node server.js --host 127.0.0.1 --port 9090 # 监听 127.0.0.1:9090
+```
+
 本地代理服务器会自动检测并优先使用，外部代理作为备用。
 
 ## 技术笔记
