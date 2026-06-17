@@ -125,22 +125,58 @@ self.addEventListener('fetch', (event) => {
   console.log(`[SW] Request mode: ${event.request.mode}`);
 
   event.respondWith(
-    fetch(originalUrl, {
-      method: event.request.method,
-      headers: event.request.headers,
-      body: event.request.body,
-      mode: 'no-cors',  // Bypass CORS enforcement completely
-      redirect: 'follow'
-    })
-    .then(response => {
-      // Clone response to modify headers
-      const newHeaders = modifyHeaders(response.headers);
+    // Try XMLHttpRequest first (sometimes has different CORS behavior)
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(event.request.method, originalUrl, true);
+      xhr.withCredentials = false;
 
-      return new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: newHeaders
-      });
+      // Copy headers from request
+      if (event.request.headers) {
+        for (const [key, value] of event.request.headers.entries()) {
+          xhr.setRequestHeader(key, value);
+        }
+      }
+
+      xhr.onload = function() {
+        const headers = new Headers();
+        xhr.getAllResponseHeaders().split('\r\n').forEach(line => {
+          const [key, value] = line.split(': ');
+          if (key && value) {
+            headers.set(key, value);
+          }
+        });
+
+        const newHeaders = modifyHeaders(headers);
+        resolve(new Response(xhr.responseText, {
+          status: xhr.status,
+          statusText: xhr.statusText,
+          headers: newHeaders
+        }));
+      };
+
+      xhr.onerror = function() {
+        console.log(`[SW] XHR failed, falling back to fetch`);
+        // Fall back to fetch
+        fetch(originalUrl, {
+          method: event.request.method,
+          headers: event.request.headers,
+          body: event.request.body,
+          mode: 'no-cors',
+          redirect: 'follow'
+        })
+        .then(response => {
+          const newHeaders = modifyHeaders(response.headers);
+          resolve(new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: newHeaders
+          }));
+        })
+        .catch(reject);
+      };
+
+      xhr.send(event.request.body || null);
     })
     .catch(error => {
       console.error(`[SW] Proxy error for ${originalUrl}:`, error);
