@@ -9,9 +9,7 @@ const StorageManager = {
       activeTabId: null,
       layout: 'top',
       collapsed: false,
-      globalZoom: 1.0,
-      proxyEnabled: true,
-      proxyUrl: 'http://localhost:8088/?url='
+      globalZoom: 1.0
     };
   },
 

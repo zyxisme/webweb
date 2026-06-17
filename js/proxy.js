@@ -1,63 +1,5 @@
 // js/proxy.js
 const ProxyManager = {
-  // Fallback proxy URLs (used when no custom proxy is set)
-  fallbackProxies: [
-    'http://localhost:8088/?url=',
-    'https://corsproxy.io/?',
-    'https://api.allorigins.win/raw?url='
-  ],
-
-  // Current proxy index (for fallback)
-  currentProxyIndex: 0,
-
-  // Get current proxy URL from settings or fallback
-  get corsProxy() {
-    const state = StorageManager.getState();
-    if (state.proxyUrl) {
-      return state.proxyUrl;
-    }
-    return this.fallbackProxies[this.currentProxyIndex];
-  },
-
-  // Check if proxy is enabled
-  get isProxyEnabled() {
-    const state = StorageManager.getState();
-    return state.proxyEnabled !== false;
-  },
-
-  // Check if a proxy URL is available
-  async checkProxy(proxyUrl) {
-    try {
-      // For local proxy, check health endpoint
-      if (proxyUrl.includes('localhost')) {
-        const healthUrl = proxyUrl.split('?')[0] + '/health';
-        const response = await fetch(healthUrl, {
-          signal: AbortSignal.timeout(1000)
-        });
-        return response.ok;
-      }
-      // For external proxies, try fetching example.com
-      const testUrl = proxyUrl + encodeURIComponent('https://example.com');
-      const response = await fetch(testUrl, {
-        signal: AbortSignal.timeout(3000)
-      });
-      return response.ok;
-    } catch {
-      return false;
-    }
-  },
-
-  // Test current proxy and return result
-  async testProxy() {
-    const proxyUrl = this.corsProxy;
-    const isAvailable = await this.checkProxy(proxyUrl);
-    return {
-      url: proxyUrl,
-      available: isAvailable,
-      enabled: this.isProxyEnabled
-    };
-  },
-
   // Initialize proxy - register Service Worker
   async init() {
     console.log('[WebWeb] Initializing proxy manager...');
@@ -107,19 +49,6 @@ const ProxyManager = {
   buildProxyUrl(url) {
     const origin = window.location.origin;
     return `${origin}/proxy/${encodeURIComponent(url)}`;
-  },
-
-  // Update proxy settings
-  updateSettings(settings) {
-    const state = StorageManager.getState();
-    if (settings.proxyEnabled !== undefined) {
-      state.proxyEnabled = settings.proxyEnabled;
-    }
-    if (settings.proxyUrl !== undefined) {
-      state.proxyUrl = settings.proxyUrl;
-    }
-    StorageManager.setState(state);
-    console.log('[WebWeb] Proxy settings updated:', settings);
   },
 
   // Load a page into an iframe

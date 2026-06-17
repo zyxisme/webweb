@@ -20,19 +20,7 @@ const App = {
     // Restore collapsed state
     this.restoreCollapsed();
 
-    // Show proxy status in console
-    this.showProxyStatus();
-
     console.log('WebWeb Browser initialized');
-  },
-
-  // Show current proxy status
-  showProxyStatus() {
-    if (!ProxyManager.isProxyEnabled) {
-      console.log('[WebWeb] 代理已禁用');
-    } else {
-      console.log(`[WebWeb] 当前代理: ${ProxyManager.corsProxy}`);
-    }
   },
 
   // Bind all events
