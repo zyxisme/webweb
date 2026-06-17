@@ -183,7 +183,7 @@ const TabManager = {
   },
 
   // Update tab URL
-  updateTabUrl(tabId, url) {
+  async updateTabUrl(tabId, url) {
     const state = StorageManager.getState();
     const tab = state.tabs.find(t => t.id === tabId);
 
@@ -192,10 +192,13 @@ const TabManager = {
     tab.url = url;
     StorageManager.setState(state);
 
-    // Update iframe src
+    // Load through proxy
     const iframe = document.getElementById('iframe-' + tabId);
     if (iframe) {
-      iframe.src = url;
+      const result = await ProxyManager.loadPage(iframe, url);
+      if (result.title) {
+        this.updateTabTitle(tabId, result.title);
+      }
     }
 
     // Update favicon
@@ -244,7 +247,6 @@ const TabManager = {
     const contentArea = document.getElementById('content-area');
     const iframe = document.createElement('iframe');
     iframe.id = 'iframe-' + tab.id;
-    iframe.src = tab.url;
     iframe.style.display = 'none';
     iframe.style.width = '100%';
     iframe.style.height = '100%';
@@ -253,70 +255,23 @@ const TabManager = {
 
     contentArea.appendChild(iframe);
 
-    // Listen for iframe load to get title and update URL
-    iframe.addEventListener('load', () => {
-      let titleUpdated = false;
-
-      // Try to get title from iframe (same-origin only)
-      try {
-        const title = iframe.contentDocument?.title;
-        if (title) {
-          this.updateTabTitle(tab.id, title);
-          titleUpdated = true;
-        }
-      } catch (e) {
-        // Cross-origin restriction
-      }
-
-      // Update URL to reflect actual navigation
-      try {
-        const currentUrl = iframe.contentWindow?.location?.href;
-        if (currentUrl && currentUrl !== 'about:blank') {
-          const state = StorageManager.getState();
-          const tabData = state.tabs.find(t => t.id === tab.id);
-          if (tabData && tabData.url !== currentUrl) {
-            tabData.url = currentUrl;
-            StorageManager.setState(state);
-
-            // Update address bar if this is the active tab
-            if (state.activeTabId === tab.id) {
-              this.updateAddressBar(tabData);
-            }
-
-            // Update favicon
-            this.updateTabFavicon(tab.id, currentUrl);
-          }
-        }
-      } catch (e) {
-        // Cross-origin restriction, use stored URL
-      }
-
-      // For cross-origin pages where we can't read the title, use hostname as fallback
-      if (!titleUpdated) {
-        const state = StorageManager.getState();
-        const tabData = state.tabs.find(t => t.id === tab.id);
-        if (tabData && tabData.url && tabData.url !== 'about:blank') {
+    // Load through proxy if it's a real URL
+    if (tab.url && tab.url !== 'about:blank') {
+      ProxyManager.loadPage(iframe, tab.url).then(result => {
+        if (result.title) {
+          this.updateTabTitle(tab.id, result.title);
+        } else {
+          // Use hostname as fallback title
           try {
-            const urlObj = new URL(tabData.url.startsWith('http') ? tabData.url : 'https://' + tabData.url);
-            const hostname = urlObj.hostname;
-            if (tabData.title === '新标签页' || tabData.title === tabData.url) {
-              this.updateTabTitle(tab.id, hostname);
-            }
+            const urlObj = new URL(tab.url.startsWith('http') ? tab.url : 'https://' + tab.url);
+            this.updateTabTitle(tab.id, urlObj.hostname);
           } catch (e) {
             // Invalid URL
           }
         }
-      }
-
-      // Update browser chrome if this is the active tab
-      const state = StorageManager.getState();
-      if (state.activeTabId === tab.id) {
-        const tabData = state.tabs.find(t => t.id === tab.id);
-        if (tabData) {
-          this.updateBrowserChrome(tabData);
-        }
-      }
-    });
+        this.updateBrowserChrome(tab);
+      });
+    }
 
     return iframe;
   },

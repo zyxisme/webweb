@@ -96,6 +96,15 @@ const App = {
       }
     });
 
+    // Listen for navigation messages from iframes (proxy mode)
+    window.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'webweb-navigate') {
+        const url = e.data.url;
+        document.getElementById('url-input').value = url;
+        this.navigateToUrl();
+      }
+    });
+
     // Save state before page unload
     window.addEventListener('beforeunload', () => {
       // State is already saved in each operation
@@ -103,7 +112,7 @@ const App = {
   },
 
   // Navigate to URL
-  navigateToUrl() {
+  async navigateToUrl() {
     const urlInput = document.getElementById('url-input');
     let url = urlInput.value.trim();
 
@@ -116,8 +125,28 @@ const App = {
 
     const activeTab = TabManager.getActiveTab();
     if (activeTab) {
-      TabManager.updateTabUrl(activeTab.id, url);
-      TabManager.updateTabTitle(activeTab.id, url);
+      const iframe = document.getElementById('iframe-' + activeTab.id);
+      if (iframe) {
+        // Update tab state
+        const state = StorageManager.getState();
+        const tab = state.tabs.find(t => t.id === activeTab.id);
+        if (tab) {
+          tab.url = url;
+          StorageManager.setState(state);
+        }
+
+        // Load through proxy
+        const result = await ProxyManager.loadPage(iframe, url);
+
+        // Update title and favicon
+        if (result.title) {
+          TabManager.updateTabTitle(activeTab.id, result.title);
+        } else {
+          TabManager.updateTabTitle(activeTab.id, url);
+        }
+        TabManager.updateTabFavicon(activeTab.id, url);
+        if (tab) TabManager.updateBrowserChrome(tab);
+      }
     }
   },
 
