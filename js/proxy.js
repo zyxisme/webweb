@@ -450,22 +450,23 @@ const ProxyManager = {
   // Load a page into an iframe
   async loadPage(iframe, url) {
     try {
-      const html = await this.fetchPage(url);
-      const title = this.extractTitle(html);
-      const rewrittenHtml = this.rewriteHtml(html, url);
-      iframe.srcdoc = rewrittenHtml;
+      console.log(`[WebWeb] Loading page: ${url}`);
+
+      // Build proxy URL
+      const proxyUrl = this.buildProxyUrl(url);
+
+      // Set iframe src instead of srcdoc
+      iframe.src = proxyUrl;
+
+      // Extract domain as title (will be updated when page loads)
+      const title = this.extractDomain(url);
+
+      console.log(`[WebWeb] ✓ Page loading: ${url}`);
       return { success: true, title };
     } catch (error) {
-      console.error('Failed to load page:', error);
+      console.error('[WebWeb] Failed to load page:', error);
 
       // Provide helpful error message
-      let helpMessage = '';
-      if (this.isProxyEnabled) {
-        helpMessage = '代理连接失败，请检查代理设置或启动本地代理: node server.js';
-      } else {
-        helpMessage = '直接访问失败，可能是跨域限制，建议启用代理';
-      }
-
       iframe.srcdoc = `
         <html>
           <body style="font-family: system-ui; padding: 40px; text-align: center;">
@@ -473,11 +474,21 @@ const ProxyManager = {
             <p style="color: #666;">${error.message}</p>
             <p style="color: #999; margin-top: 20px;">URL: ${url}</p>
             <hr style="margin: 30px auto; max-width: 400px;">
-            <p style="color: #1a73e8;">💡 ${helpMessage}</p>
+            <p style="color: #1a73e8;">💡 请检查 Service Worker 是否正常运行</p>
           </body>
         </html>
       `;
       return { success: false, error: error.message };
+    }
+  },
+
+  // Extract domain from URL
+  extractDomain(url) {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.hostname;
+    } catch {
+      return url;
     }
   }
 };
