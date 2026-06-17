@@ -61,6 +61,9 @@ webweb/
 - `corsProxy`：CORS代理地址（默认 `https://corsproxy.io/?`）
 - `fetchPage(url)`：通过代理获取页面
 - `rewriteHtml(html, baseUrl)`：重写HTML中的URL并注入导航追踪
+  - 支持的属性：`src`、`href`、`action`、`srcset`、`poster`
+  - 支持的CSS：`url()`、`@import`
+  - 自动添加`<base>`标签处理相对路径
 - `loadPage(iframe, url)`：加载页面到iframe
 - `extractTitle(html)`：从HTML中提取标题
 
@@ -101,6 +104,9 @@ webweb/
 - postMessage消息类型：`webweb-navigate`
 - JS加载顺序：storage.js → proxy.js → tab-manager.js → zoom.js → app.js
 - proxy.js必须在tab-manager.js之前加载（TabManager依赖ProxyManager）
+- URL重写支持：src/href/action/srcset/poster属性，CSS url()和@import
+- CSS @import必须在CSS url()之前处理，避免双重代理
+- 使用负向后视表达式 `(?<!@import\s)url\(...)` 排除已处理的@import
 
 ## 快捷键
 

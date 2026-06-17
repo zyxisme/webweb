@@ -31,9 +31,19 @@ const ProxyManager = {
   rewriteHtml(html, baseUrl) {
     const proxyPrefix = this.corsProxy;
 
-    // Add base tag for relative URLs
+    // Add base tag for relative URLs (more robust detection)
     if (!html.includes('<base')) {
-      html = html.replace(/<head>/i, `<head><base href="${baseUrl}">`);
+      if (html.includes('<head>')) {
+        html = html.replace(/<head>/i, `<head><base href="${baseUrl}">`);
+      } else if (html.includes('<HEAD>')) {
+        html = html.replace(/<HEAD>/i, `<HEAD><base href="${baseUrl}">`);
+      } else if (html.includes('<html>')) {
+        html = html.replace(/<html>/i, `<html><head><base href="${baseUrl}"></head>`);
+      } else if (html.includes('<HTML>')) {
+        html = html.replace(/<HTML>/i, `<HTML><head><base href="${baseUrl}"></head>`);
+      } else {
+        html = `<head><base href="${baseUrl}"></head>` + html;
+      }
     }
 
     // Rewrite src, href, action attributes
@@ -45,8 +55,50 @@ const ProxyManager = {
       return match;
     });
 
-    // Rewrite CSS url()
-    html = html.replace(/url\(["']?([^"')]*?)["']?\)/gi, (match, url) => {
+    // Rewrite srcset attribute (responsive images)
+    html = html.replace(/srcset=["']([^"']*?)["']/gi, (match, srcset) => {
+      const rewrittenSrcset = srcset.split(',').map(entry => {
+        const parts = entry.trim().split(/\s+/);
+        if (parts.length >= 1) {
+          const url = parts[0];
+          const absoluteUrl = this.resolveUrl(url, baseUrl);
+          if (absoluteUrl) {
+            parts[0] = `${proxyPrefix}${encodeURIComponent(absoluteUrl)}`;
+            return parts.join(' ');
+          }
+        }
+        return entry;
+      }).join(', ');
+      return `srcset="${rewrittenSrcset}"`;
+    });
+
+    // Rewrite poster attribute (video poster)
+    html = html.replace(/poster=["']([^"']*?)["']/gi, (match, url) => {
+      const absoluteUrl = this.resolveUrl(url, baseUrl);
+      if (absoluteUrl) {
+        return `poster="${proxyPrefix}${encodeURIComponent(absoluteUrl)}"`;
+      }
+      return match;
+    });
+
+    // Rewrite @import in CSS (handle multiple formats) - MUST be before CSS url() rewrite
+    html = html.replace(/@import\s+url\(["']?([^"')]+?)["']?\)/gi, (match, url) => {
+      const absoluteUrl = this.resolveUrl(url, baseUrl);
+      if (absoluteUrl) {
+        return `@import url("${proxyPrefix}${encodeURIComponent(absoluteUrl)}")`;
+      }
+      return match;
+    });
+    html = html.replace(/@import\s+["']([^"']+)["']/gi, (match, url) => {
+      const absoluteUrl = this.resolveUrl(url, baseUrl);
+      if (absoluteUrl) {
+        return `@import url("${proxyPrefix}${encodeURIComponent(absoluteUrl)}")`;
+      }
+      return match;
+    });
+
+    // Rewrite CSS url() (excluding @import which was already handled)
+    html = html.replace(/(?<!@import\s)url\(["']?([^"')]*?)["']?\)/gi, (match, url) => {
       const absoluteUrl = this.resolveUrl(url, baseUrl);
       if (absoluteUrl) {
         return `url("${proxyPrefix}${encodeURIComponent(absoluteUrl)}")`;
