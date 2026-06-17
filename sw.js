@@ -28,16 +28,19 @@ const CORS_HEADERS = {
  * Check if a URL is a proxy request
  */
 function isProxyUrl(url) {
-  return url.includes(PROXY_PREFIX);
+  try {
+    return new URL(url).pathname.startsWith(PROXY_PREFIX);
+  } catch { return false; }
 }
 
 /**
  * Extract original URL from proxy URL
  */
 function getOriginalUrl(url) {
-  const proxyIndex = url.indexOf(PROXY_PREFIX);
-  if (proxyIndex === -1) return url;
-  return decodeURIComponent(url.substring(proxyIndex + PROXY_PREFIX.length));
+  const parsed = new URL(url);
+  const pathIndex = parsed.pathname.indexOf(PROXY_PREFIX);
+  if (pathIndex === -1) return url;
+  return decodeURIComponent(parsed.pathname.substring(pathIndex + PROXY_PREFIX.length) + parsed.search + parsed.hash);
 }
 
 /**
