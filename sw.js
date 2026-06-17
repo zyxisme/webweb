@@ -62,19 +62,21 @@ function modifyHeaders(originalHeaders) {
 
 // Install event
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing Service Worker');
+  console.log('[SW] Installing Service Worker...');
   self.skipWaiting();
 });
 
 // Activate event
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating Service Worker');
+  console.log('[SW] Activating Service Worker...');
   event.waitUntil(clients.claim());
+  console.log('[SW] Service Worker activated and claimed clients');
 });
 
 // Fetch event - main interception logic
 self.addEventListener('fetch', (event) => {
   const url = event.request.url;
+  console.log('[SW] Fetch event:', url);
 
   // Handle navigation requests (link clicks, form submissions)
   if (event.request.mode === 'navigate') {
