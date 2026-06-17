@@ -125,59 +125,37 @@ self.addEventListener('fetch', (event) => {
   console.log(`[SW] Request mode: ${event.request.mode}`);
 
   event.respondWith(
-    // Try XMLHttpRequest first (sometimes has different CORS behavior)
-    new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open(event.request.method, originalUrl, true);
-      xhr.withCredentials = false;
+    // Try all fetch modes
+    (async () => {
+      const modes = ['no-cors', 'cors', 'navigate', 'same-origin'];
+      let lastError = null;
 
-      // Copy headers from request
-      if (event.request.headers) {
-        for (const [key, value] of event.request.headers.entries()) {
-          xhr.setRequestHeader(key, value);
-        }
-      }
+      for (const mode of modes) {
+        try {
+          console.log(`[SW] Trying fetch mode: ${mode}`);
+          const response = await fetch(originalUrl, {
+            method: event.request.method,
+            headers: event.request.headers,
+            body: event.request.body,
+            mode: mode,
+            redirect: 'follow'
+          });
 
-      xhr.onload = function() {
-        const headers = new Headers();
-        xhr.getAllResponseHeaders().split('\r\n').forEach(line => {
-          const [key, value] = line.split(': ');
-          if (key && value) {
-            headers.set(key, value);
-          }
-        });
-
-        const newHeaders = modifyHeaders(headers);
-        resolve(new Response(xhr.responseText, {
-          status: xhr.status,
-          statusText: xhr.statusText,
-          headers: newHeaders
-        }));
-      };
-
-      xhr.onerror = function() {
-        console.log(`[SW] XHR failed, falling back to fetch`);
-        // Fall back to fetch
-        fetch(originalUrl, {
-          method: event.request.method,
-          headers: event.request.headers,
-          body: event.request.body,
-          mode: 'no-cors',
-          redirect: 'follow'
-        })
-        .then(response => {
+          console.log(`[SW] Fetch mode ${mode} succeeded, status: ${response.status}`);
           const newHeaders = modifyHeaders(response.headers);
-          resolve(new Response(response.body, {
+          return new Response(response.body, {
             status: response.status,
             statusText: response.statusText,
             headers: newHeaders
-          }));
-        })
-        .catch(reject);
-      };
+          });
+        } catch (error) {
+          console.log(`[SW] Fetch mode ${mode} failed:`, error.message);
+          lastError = error;
+        }
+      }
 
-      xhr.send(event.request.body || null);
-    })
+      throw lastError;
+    })()
     .catch(error => {
       console.error(`[SW] Proxy error for ${originalUrl}:`, error);
 
