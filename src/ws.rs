@@ -112,8 +112,8 @@ async fn handle_socket(socket: WebSocket, browser: Arc<Mutex<BrowserManager>>) {
         if let Message::Text(text) = message {
             match serde_json::from_str::<ClientMessage>(&text) {
                 Ok(msg) => {
-                    let response = handle_message(msg, &browser).await;
-                    if let Some(resp) = response {
+                    let responses = handle_message(msg, &browser).await;
+                    for resp in responses {
                         if let Ok(json) = serde_json::to_string(&resp) {
                             let _ = sender.send(Message::Text(json.into())).await;
                         }
@@ -136,11 +136,10 @@ async fn handle_socket(socket: WebSocket, browser: Arc<Mutex<BrowserManager>>) {
 async fn handle_message(
     message: ClientMessage,
     browser: &Arc<Mutex<BrowserManager>>,
-) -> Option<ServerMessage> {
+) -> Vec<ServerMessage> {
     match message {
         ClientMessage::Navigate { tab_id, url } => {
             let browser = browser.lock().await;
-            // Convert error to String to avoid holding Box<dyn Error> across await
             let nav_result = browser
                 .navigate(&tab_id, &url)
                 .await
@@ -148,27 +147,51 @@ async fn handle_message(
             match nav_result {
                 Ok(_) => {
                     if let Some(page) = browser.get_tab(&tab_id).await {
+                        let mut responses = Vec::new();
+
+                        // Extract DOM
                         match DomExtractor::extract_dom(&page).await {
                             Ok(dom) => {
                                 let dom_json = serde_json::to_value(&dom).unwrap();
-                                Some(ServerMessage::DomFull {
+                                responses.push(ServerMessage::DomFull {
                                     tab_id: tab_id.clone(),
                                     dom: dom_json,
-                                })
+                                });
                             }
-                            Err(e) => Some(ServerMessage::Error {
-                                message: format!("Failed to extract DOM: {}", e),
-                            }),
+                            Err(e) => {
+                                responses.push(ServerMessage::Error {
+                                    message: format!("Failed to extract DOM: {}", e),
+                                });
+                                return responses;
+                            }
                         }
+
+                        // Get final URL (handles redirects)
+                        if let Some(final_url) = page.url().await.ok().flatten() {
+                            responses.push(ServerMessage::Url {
+                                tab_id: tab_id.clone(),
+                                url: final_url,
+                            });
+                        }
+
+                        // Get page title
+                        if let Ok(Some(title)) = page.get_title().await {
+                            responses.push(ServerMessage::Title {
+                                tab_id: tab_id.clone(),
+                                title,
+                            });
+                        }
+
+                        responses
                     } else {
-                        Some(ServerMessage::Error {
+                        vec![ServerMessage::Error {
                             message: "Tab not found".to_string(),
-                        })
+                        }]
                     }
                 }
-                Err(e) => Some(ServerMessage::Error {
+                Err(e) => vec![ServerMessage::Error {
                     message: format!("Navigation failed: {}", e),
-                }),
+                }],
             }
         }
 
@@ -178,39 +201,39 @@ async fn handle_message(
                 match DomExtractor::extract_dom(&page).await {
                     Ok(dom) => {
                         let dom_json = serde_json::to_value(&dom).unwrap();
-                        Some(ServerMessage::DomFull {
+                        vec![ServerMessage::DomFull {
                             tab_id: tab_id.clone(),
                             dom: dom_json,
-                        })
+                        }]
                     }
-                    Err(e) => Some(ServerMessage::Error {
+                    Err(e) => vec![ServerMessage::Error {
                         message: format!("Failed to extract DOM: {}", e),
-                    }),
+                    }],
                 }
             } else {
-                Some(ServerMessage::Error {
+                vec![ServerMessage::Error {
                     message: "Tab not found".to_string(),
-                })
+                }]
             }
         }
 
         ClientMessage::TabCreate { tab_id } => {
             let browser = browser.lock().await;
             match browser.create_tab(&tab_id).await {
-                Ok(_) => Some(ServerMessage::TabCreated { tab_id }),
-                Err(e) => Some(ServerMessage::Error {
+                Ok(_) => vec![ServerMessage::TabCreated { tab_id }],
+                Err(e) => vec![ServerMessage::Error {
                     message: format!("Failed to create tab: {}", e),
-                }),
+                }],
             }
         }
 
         ClientMessage::TabClose { tab_id } => {
             let browser = browser.lock().await;
             match browser.close_tab(&tab_id).await {
-                Ok(_) => Some(ServerMessage::TabClosed { tab_id }),
-                Err(e) => Some(ServerMessage::Error {
+                Ok(_) => vec![ServerMessage::TabClosed { tab_id }],
+                Err(e) => vec![ServerMessage::Error {
                     message: format!("Failed to close tab: {}", e),
-                }),
+                }],
             }
         }
 
@@ -223,7 +246,6 @@ async fn handle_message(
         } => {
             let browser = browser.lock().await;
             if let Some(page) = browser.get_tab(&tab_id).await {
-                // Map frontend event type to CDP mouse event type
                 let mouse_event_type = match event_type.as_str() {
                     "mousedown" => DispatchMouseEventType::MousePressed,
                     "mouseup" => DispatchMouseEventType::MouseReleased,
@@ -231,10 +253,9 @@ async fn handle_message(
                     "click" => DispatchMouseEventType::MousePressed,
                     "dblclick" => DispatchMouseEventType::MousePressed,
                     "contextmenu" => DispatchMouseEventType::MousePressed,
-                    _ => return None,
+                    _ => return vec![],
                 };
 
-                // Map button index to CDP MouseButton
                 let mouse_button = match button {
                     0 => MouseButton::Left,
                     1 => MouseButton::Middle,
@@ -244,7 +265,6 @@ async fn handle_message(
                     _ => MouseButton::Left,
                 };
 
-                // Determine click count for click/dblclick events
                 let click_count = match event_type.as_str() {
                     "click" => 1,
                     "dblclick" => 2,
@@ -252,7 +272,6 @@ async fn handle_message(
                     _ => 0,
                 };
 
-                // Build and execute the mouse event
                 let mouse_params = DispatchMouseEventParams::builder()
                     .r#type(mouse_event_type)
                     .x(x)
@@ -272,7 +291,7 @@ async fn handle_message(
                     }
                 }
             }
-            None
+            vec![]
         }
 
         ClientMessage::Keyboard {
@@ -283,15 +302,13 @@ async fn handle_message(
         } => {
             let browser = browser.lock().await;
             if let Some(page) = browser.get_tab(&tab_id).await {
-                // Map frontend event type to CDP key event type
                 let key_event_type = match event_type.as_str() {
                     "keydown" => DispatchKeyEventType::KeyDown,
                     "keyup" => DispatchKeyEventType::KeyUp,
                     "keypress" => DispatchKeyEventType::Char,
-                    _ => return None,
+                    _ => return vec![],
                 };
 
-                // Build and execute the key event
                 let key_params = DispatchKeyEventParams::builder()
                     .r#type(key_event_type)
                     .key(&key)
@@ -309,7 +326,7 @@ async fn handle_message(
                     }
                 }
             }
-            None
+            vec![]
         }
 
         ClientMessage::Scroll {
@@ -321,7 +338,6 @@ async fn handle_message(
         } => {
             let browser = browser.lock().await;
             if let Some(page) = browser.get_tab(&tab_id).await {
-                // Use DispatchMouseEvent with MouseWheel type for scroll events
                 let scroll_params = DispatchMouseEventParams::builder()
                     .r#type(DispatchMouseEventType::MouseWheel)
                     .x(x)
@@ -341,7 +357,6 @@ async fn handle_message(
                     }
                 }
 
-                // Get updated scroll position after dispatching the scroll event
                 let scroll_top = page
                     .evaluate("window.scrollY")
                     .await
@@ -355,13 +370,13 @@ async fn handle_message(
                     .and_then(|v| v.value().and_then(|val| val.as_f64()))
                     .unwrap_or(0.0);
 
-                return Some(ServerMessage::ScrollUpdate {
+                return vec![ServerMessage::ScrollUpdate {
                     tab_id,
                     scroll_top,
                     scroll_left,
-                });
+                }];
             }
-            None
+            vec![]
         }
     }
 }

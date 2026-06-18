@@ -1,6 +1,5 @@
-// dom.rs - DOM tree extraction from Chrome via CDP
+// dom.rs - DOM tree extraction from Chrome via JavaScript evaluation
 
-use chromiumoxide::cdp::browser_protocol::dom::Node;
 use chromiumoxide::page::Page;
 use serde::{Deserialize, Serialize};
 
@@ -69,101 +68,97 @@ pub struct BoxModel {
 pub struct DomExtractor;
 
 impl DomExtractor {
+    /// Extract the full DOM tree using JavaScript evaluation.
+    /// This gets computed styles and box models in a single call,
+    /// which is much faster than per-node CDP calls.
     pub async fn extract_dom(page: &Page) -> Result<DomNode, Box<dyn std::error::Error>> {
-        // Enable DOM domain
-        page.enable_dom().await?;
-
-        // Get document root
-        let doc = page.get_document().await?;
-
-        // Recursively extract nodes
-        let root = Self::extract_node(page, &doc).await?;
-
-        Ok(root)
-    }
-
-    async fn extract_node(
-        page: &Page,
-        node: &Node,
-    ) -> Result<DomNode, Box<dyn std::error::Error>> {
-        let node_id = *node.node_id.inner();
-        let node_type = node.node_type;
-        let node_name = node.node_name.clone();
-        let node_value = node.node_value.clone();
-
-        // Extract attributes from flat array into key-value pairs
-        let attributes = node
-            .attributes
-            .clone()
-            .unwrap_or_default()
-            .chunks(2)
-            .map(|chunk| {
-                if chunk.len() == 2 {
-                    (chunk[0].clone(), chunk[1].clone())
-                } else {
-                    (String::new(), String::new())
+        let js_code = r#"
+            (function() {
+                let nextId = 0;
+                function getAttrs(el) {
+                    const attrs = [];
+                    for (let i = 0; i < el.attributes.length; i++) {
+                        const a = el.attributes[i];
+                        attrs.push([a.name, a.value]);
+                    }
+                    return attrs;
                 }
-            })
-            .collect();
+                function getCS(el) {
+                    const s = getComputedStyle(el);
+                    function g(p) { return s.getPropertyValue(p) || ''; }
+                    return {
+                        display: s.display || '', position: s.position || '',
+                        width: s.width || '', height: s.height || '',
+                        top: s.top || '', left: s.left || '',
+                        right: s.right || '', bottom: s.bottom || '',
+                        margin_top: s.marginTop || '', margin_right: s.marginRight || '',
+                        margin_bottom: s.marginBottom || '', margin_left: s.marginLeft || '',
+                        padding_top: s.paddingTop || '', padding_right: s.paddingRight || '',
+                        padding_bottom: s.paddingBottom || '', padding_left: s.paddingLeft || '',
+                        font_size: s.fontSize || '', font_family: s.fontFamily || '',
+                        font_weight: s.fontWeight || '', color: s.color || '',
+                        background_color: s.backgroundColor || '',
+                        border_top_width: s.borderTopWidth || '',
+                        border_right_width: s.borderRightWidth || '',
+                        border_bottom_width: s.borderBottomWidth || '',
+                        border_left_width: s.borderLeftWidth || '',
+                        overflow: s.overflow || '', visibility: s.visibility || '',
+                        opacity: s.opacity || '',
+                        z_index: s.zIndex || null,
+                        flex_direction: s.flexDirection || null,
+                        justify_content: s.justifyContent || null,
+                        align_items: s.alignItems || null
+                    };
+                }
+                const sx = window.scrollX || 0, sy = window.scrollY || 0;
+                function walk(node) {
+                    if (node.nodeType === 3) {
+                        const text = node.nodeValue;
+                        if (!text || !text.trim()) return null;
+                        const range = document.createRange();
+                        range.selectNodeContents(node);
+                        const rects = range.getClientRects();
+                        let x = 0, y = 0, w = 0, h = 0;
+                        if (rects.length > 0) {
+                            const r = rects[0];
+                            x = r.left + sx; y = r.top + sy; w = r.width; h = r.height;
+                        }
+                        return {
+                            node_id: nextId++, node_type: 3, node_name: '#text',
+                            node_value: text, attributes: [], children: [],
+                            computed_style: null,
+                            box_model: { content: [x, y, w, h], padding: [0,0,0,0], border: [0,0,0,0], margin: [0,0,0,0], width: w, height: h },
+                            scroll_top: null, scroll_left: null, scroll_width: null, scroll_height: null
+                        };
+                    }
+                    if (node.nodeType !== 1) return null;
+                    const el = node;
+                    const cs = getCS(el);
+                    if (cs.display === 'none') return null;
+                    const r = el.getBoundingClientRect();
+                    const children = [];
+                    for (let i = 0; i < node.childNodes.length; i++) {
+                        const c = walk(node.childNodes[i]);
+                        if (c) children.push(c);
+                    }
+                    const st = el.scrollTop || 0, sl = el.scrollLeft || 0;
+                    const sw = el.scrollWidth || 0, sh = el.scrollHeight || 0;
+                    return {
+                        node_id: nextId++, node_type: 1, node_name: el.tagName,
+                        node_value: '', attributes: getAttrs(el), children: children,
+                        computed_style: cs,
+                        box_model: { content: [r.left + sx, r.top + sy, r.width, r.height], padding: [0,0,0,0], border: [0,0,0,0], margin: [0,0,0,0], width: r.width, height: r.height },
+                        scroll_top: st || null, scroll_left: sl || null,
+                        scroll_width: sw || null, scroll_height: sh || null
+                    };
+                }
+                return walk(document.documentElement);
+            })()
+        "#;
 
-        // Extract children recursively
-        let mut children = Vec::new();
-        if let Some(child_nodes) = &node.children {
-            for child in child_nodes {
-                let child_dom = Box::pin(Self::extract_node(page, child)).await?;
-                children.push(child_dom);
-            }
-        }
-
-        // Computed style - TODO: Phase 4 optimization
-        let computed_style = None;
-
-        // Box model - TODO: Phase 4 optimization
-        let box_model = None;
-
-        // Extract scroll info for root elements (HTML and BODY)
-        let (scroll_top, scroll_left, scroll_width, scroll_height) =
-            if node_name == "HTML" || node_name == "BODY" {
-                let scroll_top = page
-                    .evaluate("document.documentElement.scrollTop || document.body.scrollTop")
-                    .await
-                    .ok()
-                    .and_then(|v| v.value().and_then(|val| val.as_f64()));
-                let scroll_left = page
-                    .evaluate("document.documentElement.scrollLeft || document.body.scrollLeft")
-                    .await
-                    .ok()
-                    .and_then(|v| v.value().and_then(|val| val.as_f64()));
-                let scroll_width = page
-                    .evaluate("document.documentElement.scrollWidth || document.body.scrollWidth")
-                    .await
-                    .ok()
-                    .and_then(|v| v.value().and_then(|val| val.as_f64()));
-                let scroll_height = page
-                    .evaluate(
-                        "document.documentElement.scrollHeight || document.body.scrollHeight",
-                    )
-                    .await
-                    .ok()
-                    .and_then(|v| v.value().and_then(|val| val.as_f64()));
-                (scroll_top, scroll_left, scroll_width, scroll_height)
-            } else {
-                (None, None, None, None)
-            };
-
-        Ok(DomNode {
-            node_id,
-            node_type,
-            node_name,
-            node_value,
-            attributes,
-            children,
-            computed_style,
-            box_model,
-            scroll_top,
-            scroll_left,
-            scroll_width,
-            scroll_height,
-        })
+        let result = page.evaluate(js_code).await?;
+        let value = result.value().ok_or("No value returned from JS evaluation")?;
+        let dom: DomNode = serde_json::from_value(value.clone())?;
+        Ok(dom)
     }
 }
