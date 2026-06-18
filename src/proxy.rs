@@ -12,10 +12,9 @@ pub struct ProxyParams {
 }
 
 const BLOCKED_REQUEST_HEADERS: &[&str] = &[
+    // Host is stripped because reqwest sets it automatically from the target URL
     "host",
-    "origin",
-    "referer",
-    "cookie",
+    // Security response headers that should not be forwarded in requests
     "x-frame-options",
     "content-security-policy",
     "x-content-type-options",
@@ -115,5 +114,153 @@ pub async fn proxy_handler(
 
             (StatusCode::BAD_GATEWAY, error_response.to_string()).into_response()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderValue;
+
+    #[test]
+    fn test_filter_request_headers_removes_security_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-frame-options", HeaderValue::from_static("DENY"));
+        headers.insert("content-security-policy", HeaderValue::from_static("default-src 'self'"));
+        headers.insert("x-content-type-options", HeaderValue::from_static("nosniff"));
+        headers.insert("strict-transport-security", HeaderValue::from_static("max-age=31536000"));
+        headers.insert("accept", HeaderValue::from_static("text/html"));
+
+        let filtered = filter_request_headers(&headers);
+
+        assert!(filtered.get("x-frame-options").is_none());
+        assert!(filtered.get("content-security-policy").is_none());
+        assert!(filtered.get("x-content-type-options").is_none());
+        assert!(filtered.get("strict-transport-security").is_none());
+        assert_eq!(filtered.get("accept").unwrap(), "text/html");
+    }
+
+    #[test]
+    fn test_filter_request_headers_removes_host() {
+        let mut headers = HeaderMap::new();
+        headers.insert("host", HeaderValue::from_static("example.com"));
+        headers.insert("accept", HeaderValue::from_static("text/html"));
+
+        let filtered = filter_request_headers(&headers);
+
+        assert!(filtered.get("host").is_none());
+        assert_eq!(filtered.get("accept").unwrap(), "text/html");
+    }
+
+    #[test]
+    fn test_filter_request_headers_forwards_origin_referer_cookie() {
+        let mut headers = HeaderMap::new();
+        headers.insert("origin", HeaderValue::from_static("https://example.com"));
+        headers.insert("referer", HeaderValue::from_static("https://example.com/page"));
+        headers.insert("cookie", HeaderValue::from_static("session=abc123"));
+        headers.insert("accept", HeaderValue::from_static("text/html"));
+
+        let filtered = filter_request_headers(&headers);
+
+        assert_eq!(filtered.get("origin").unwrap(), "https://example.com");
+        assert_eq!(filtered.get("referer").unwrap(), "https://example.com/page");
+        assert_eq!(filtered.get("cookie").unwrap(), "session=abc123");
+        assert_eq!(filtered.get("accept").unwrap(), "text/html");
+    }
+
+    #[test]
+    fn test_filter_request_headers_empty() {
+        let headers = HeaderMap::new();
+        let filtered = filter_request_headers(&headers);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn test_filter_request_headers_forwards_standard_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert("accept", HeaderValue::from_static("text/html"));
+        headers.insert("accept-language", HeaderValue::from_static("en-US"));
+        headers.insert("user-agent", HeaderValue::from_static("Mozilla/5.0"));
+        headers.insert("content-type", HeaderValue::from_static("application/json"));
+
+        let filtered = filter_request_headers(&headers);
+
+        assert_eq!(filtered.get("accept").unwrap(), "text/html");
+        assert_eq!(filtered.get("accept-language").unwrap(), "en-US");
+        assert_eq!(filtered.get("user-agent").unwrap(), "Mozilla/5.0");
+        assert_eq!(filtered.get("content-type").unwrap(), "application/json");
+    }
+
+    #[test]
+    fn test_filter_response_headers_removes_security_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-frame-options", HeaderValue::from_static("DENY"));
+        headers.insert("content-security-policy", HeaderValue::from_static("default-src 'self'"));
+        headers.insert("x-content-type-options", HeaderValue::from_static("nosniff"));
+        headers.insert("strict-transport-security", HeaderValue::from_static("max-age=31536000"));
+        headers.insert("content-type", HeaderValue::from_static("text/html"));
+
+        let filtered = filter_response_headers(&headers);
+
+        assert!(filtered.get("x-frame-options").is_none());
+        assert!(filtered.get("content-security-policy").is_none());
+        assert!(filtered.get("x-content-type-options").is_none());
+        assert!(filtered.get("strict-transport-security").is_none());
+        assert_eq!(filtered.get("content-type").unwrap(), "text/html");
+    }
+
+    #[test]
+    fn test_filter_response_headers_adds_cors_header() {
+        let headers = HeaderMap::new();
+        let filtered = filter_response_headers(&headers);
+
+        assert_eq!(filtered.get("access-control-allow-origin").unwrap(), "*");
+    }
+
+    #[test]
+    fn test_filter_response_headers_forwards_content_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert("content-type", HeaderValue::from_static("application/json"));
+        headers.insert("cache-control", HeaderValue::from_static("no-cache"));
+        headers.insert("etag", HeaderValue::from_static("\"abc123\""));
+
+        let filtered = filter_response_headers(&headers);
+
+        assert_eq!(filtered.get("content-type").unwrap(), "application/json");
+        assert_eq!(filtered.get("cache-control").unwrap(), "no-cache");
+        assert_eq!(filtered.get("etag").unwrap(), "\"abc123\"");
+        assert_eq!(filtered.get("access-control-allow-origin").unwrap(), "*");
+    }
+
+    #[test]
+    fn test_filter_response_headers_empty() {
+        let headers = HeaderMap::new();
+        let filtered = filter_response_headers(&headers);
+        // Should still have CORS header
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered.get("access-control-allow-origin").unwrap(), "*");
+    }
+
+    #[test]
+    fn test_blocked_request_headers_constants() {
+        // Verify host is blocked (reqwest sets it from URL)
+        assert!(BLOCKED_REQUEST_HEADERS.contains(&"host"));
+        // Verify security headers are blocked
+        assert!(BLOCKED_REQUEST_HEADERS.contains(&"x-frame-options"));
+        assert!(BLOCKED_REQUEST_HEADERS.contains(&"content-security-policy"));
+        assert!(BLOCKED_REQUEST_HEADERS.contains(&"x-content-type-options"));
+        assert!(BLOCKED_REQUEST_HEADERS.contains(&"strict-transport-security"));
+        // Verify origin, referer, cookie are NOT blocked (transparent passthrough)
+        assert!(!BLOCKED_REQUEST_HEADERS.contains(&"origin"));
+        assert!(!BLOCKED_REQUEST_HEADERS.contains(&"referer"));
+        assert!(!BLOCKED_REQUEST_HEADERS.contains(&"cookie"));
+    }
+
+    #[test]
+    fn test_blocked_response_headers_constants() {
+        assert!(BLOCKED_RESPONSE_HEADERS.contains(&"x-frame-options"));
+        assert!(BLOCKED_RESPONSE_HEADERS.contains(&"content-security-policy"));
+        assert!(BLOCKED_RESPONSE_HEADERS.contains(&"x-content-type-options"));
+        assert!(BLOCKED_RESPONSE_HEADERS.contains(&"strict-transport-security"));
     }
 }
