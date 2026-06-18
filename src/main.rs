@@ -24,6 +24,10 @@ struct Cli {
     /// Bind address (default: 0.0.0.0:7899)
     #[arg(short, long, default_value = "0.0.0.0:7899")]
     bind: String,
+
+    /// Chrome executable path (auto-detect if not specified)
+    #[arg(long)]
+    chrome_path: Option<String>,
 }
 
 async fn try_bind(addr: &str) -> Result<tokio::net::TcpListener, std::io::Error> {
@@ -81,7 +85,7 @@ async fn main() {
 
     // Initialize browser manager
     let browser = Arc::new(Mutex::new(
-        BrowserManager::new()
+        BrowserManager::new(cli.chrome_path.as_deref())
             .await
             .expect("Failed to start browser"),
     ));

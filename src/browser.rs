@@ -13,11 +13,18 @@ pub struct BrowserManager {
 }
 
 impl BrowserManager {
-    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let config = BrowserConfig::builder()
+    pub async fn new(chrome_path: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut builder = BrowserConfig::builder()
             .disable_default_args()
-            .build()?;
+            .arg("--no-sandbox")
+            .arg("--disable-setuid-sandbox")
+            .arg("--disable-dev-shm-usage");
 
+        if let Some(path) = chrome_path {
+            builder = builder.chrome_executable(path);
+        }
+
+        let config = builder.build()?;
         let (browser, mut handler) = Browser::launch(config).await?;
 
         // Spawn handler in background
