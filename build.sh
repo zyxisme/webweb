@@ -8,7 +8,7 @@
 #
 # Requirements:
 #   - Rust toolchain (rustup, cargo)
-#   - For Windows: sudo apt install mingw-w64 && rustup target add x86_64-pc-windows-gnu
+#   - For Windows: rustup target add x86_64-pc-windows-msvc (MSVC linker required)
 #   - For macOS: osxcross toolchain (or build on macOS)
 
 set -e  # Exit on error
@@ -37,7 +37,9 @@ build_target() {
     echo -e "${YELLOW}Building for ${platform} (${target})...${NC}"
 
     # Install target if not already installed
-    rustup target add "$target" 2>/dev/null || true
+    if ! rustup target add "$target" 2>/dev/null; then
+        echo -e "${YELLOW}  Warning: Failed to install target ${target} (may already be installed or network error)${NC}"
+    fi
 
     # Build release
     cargo build --release --target "$target"
@@ -122,13 +124,8 @@ if [ "$BUILD_ALL" = true ]; then
         echo -e "${YELLOW}Skipping macOS targets (requires macOS host or osxcross)${NC}"
     fi
 
-    # Windows (requires mingw-w64)
-    if command -v x86_64-w64-mingw32-gcc &> /dev/null; then
-        build_target "x86_64-pc-windows-gnu" "windows-x86_64"
-    else
-        echo -e "${YELLOW}Skipping Windows target (mingw-w64 not installed)${NC}"
-        echo "  Install with: sudo apt install mingw-w64"
-    fi
+    # Windows (requires MSVC linker or cross-compilation toolchain)
+    build_target "x86_64-pc-windows-msvc" "windows-x86_64"
 fi
 
 echo ""

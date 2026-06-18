@@ -16,9 +16,8 @@
 # [target.aarch64-apple-darwin]
 # linker = "aarch64-apple-darwin20.4-clang"
 
-# Windows target (requires mingw-w64 on Linux)
-# Install: sudo apt install mingw-w64
-# Install: rustup target add x86_64-pc-windows-gnu
-# [target.x86_64-pc-windows-gnu]
-# linker = "x86_64-w64-mingw32-gcc"
-# rustflags = ["-C", "link-arg=-lws2_32"]
+# Windows target (requires MSVC linker on Windows or cross-compilation toolchain)
+# Install: rustup target add x86_64-pc-windows-msvc
+# On Windows: MSVC Build Tools required (Visual Studio installer)
+# [target.x86_64-pc-windows-msvc]
+# linker = "link.exe"
