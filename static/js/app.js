@@ -14,6 +14,7 @@ class App {
 
         this.activeTabId = null;
         this.tabs = new Map();
+        this.logMessages = [];
 
         this.init();
     }
@@ -22,9 +23,9 @@ class App {
         // Connect WebSocket
         try {
             await this.ws.connect();
-            console.log('WebSocket connected');
+            this.log('WebSocket connected');
         } catch (e) {
-            console.error('Failed to connect WebSocket:', e);
+            this.log('[ERROR] Failed to connect WebSocket: ' + e.message);
         }
 
         // Bind events
@@ -37,10 +38,20 @@ class App {
         this.createTab();
     }
 
+    log(message) {
+        console.log(message);
+        this.logMessages.push(message);
+        const logOutput = document.getElementById('log-output');
+        if (logOutput) {
+            logOutput.textContent = this.logMessages.join('\n');
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+    }
+
     bindEvents() {
         // URL input
         const urlInput = document.getElementById('url-input');
-        const goBtn = document.getElementById('btn-go');
+        const goBtn = document.getElementById('go-btn');
 
         urlInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -53,21 +64,58 @@ class App {
         });
 
         // Navigation buttons
-        document.getElementById('btn-back')?.addEventListener('click', () => {
+        document.getElementById('back-btn')?.addEventListener('click', () => {
             // TODO: Implement back navigation
         });
 
-        document.getElementById('btn-forward')?.addEventListener('click', () => {
+        document.getElementById('forward-btn')?.addEventListener('click', () => {
             // TODO: Implement forward navigation
         });
 
-        document.getElementById('btn-refresh')?.addEventListener('click', () => {
+        document.getElementById('refresh-btn')?.addEventListener('click', () => {
             this.refreshCurrentTab();
         });
 
         // New tab button
-        document.getElementById('btn-new-tab')?.addEventListener('click', () => {
+        document.getElementById('new-tab-btn')?.addEventListener('click', () => {
             this.createTab();
+        });
+
+        // Zoom controls
+        document.getElementById('zoom-in-btn')?.addEventListener('click', () => {
+            this.zoomManager.zoomIn();
+            this.updateZoomLevel();
+        });
+
+        document.getElementById('zoom-out-btn')?.addEventListener('click', () => {
+            this.zoomManager.zoomOut();
+            this.updateZoomLevel();
+        });
+
+        // Layout toggle
+        document.getElementById('layout-toggle-btn')?.addEventListener('click', () => {
+            this.toggleLayout();
+        });
+
+        // Settings button
+        document.getElementById('settings-btn')?.addEventListener('click', () => {
+            this.showSettings();
+        });
+
+        document.getElementById('close-settings-btn')?.addEventListener('click', () => {
+            this.hideSettings();
+        });
+
+        // Settings modal close on background click
+        document.getElementById('settings-modal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'settings-modal') {
+                this.hideSettings();
+            }
+        });
+
+        // Collapse button
+        document.getElementById('collapse-btn')?.addEventListener('click', () => {
+            this.toggleCollapse();
         });
 
         // Canvas events
@@ -82,6 +130,12 @@ class App {
         window.addEventListener('resize', () => {
             this.renderer.resize();
         });
+
+        // Initialize zoom level display
+        this.updateZoomLevel();
+
+        // Initialize layout
+        this.initializeLayout();
     }
 
     bindCanvasEvents() {
@@ -120,15 +174,15 @@ class App {
         });
 
         this.ws.on('error', (msg) => {
-            console.error('Server error:', msg.message);
+            this.log('[ERROR] Server error: ' + msg.message);
         });
 
         this.ws.on('tab_created', (msg) => {
-            console.log('Tab created:', msg.tab_id);
+            this.log('Tab created: ' + msg.tab_id);
         });
 
         this.ws.on('tab_closed', (msg) => {
-            console.log('Tab closed:', msg.tab_id);
+            this.log('Tab closed: ' + msg.tab_id);
         });
 
         this.ws.on('scroll_update', (msg) => {
@@ -292,6 +346,40 @@ class App {
         // Don't capture when typing in URL input
         if (event.target.id === 'url-input') return;
 
+        // Handle keyboard shortcuts
+        if (event.ctrlKey || event.metaKey) {
+            switch (event.key) {
+                case 't':
+                case 'T':
+                    event.preventDefault();
+                    this.createTab();
+                    return;
+                case 'w':
+                case 'W':
+                    event.preventDefault();
+                    if (this.activeTabId) {
+                        this.closeTab(this.activeTabId);
+                    }
+                    return;
+                case '=':
+                case '+':
+                    event.preventDefault();
+                    this.zoomManager.zoomIn();
+                    this.updateZoomLevel();
+                    return;
+                case '-':
+                    event.preventDefault();
+                    this.zoomManager.zoomOut();
+                    this.updateZoomLevel();
+                    return;
+                case '0':
+                    event.preventDefault();
+                    this.zoomManager.resetZoom();
+                    this.updateZoomLevel();
+                    return;
+            }
+        }
+
         this.ws.send({
             type: 'keyboard',
             tab_id: this.activeTabId,
@@ -299,6 +387,66 @@ class App {
             code: event.code,
             event_type: event.type
         });
+    }
+
+    // Zoom methods
+    updateZoomLevel() {
+        const zoomLevel = document.getElementById('zoom-level');
+        if (zoomLevel) {
+            zoomLevel.textContent = Math.round(this.zoomManager.getZoom() * 100) + '%';
+        }
+    }
+
+    // Layout methods
+    initializeLayout() {
+        const savedLayout = this.storage.get('layout') || 'top';
+        const browser = document.getElementById('browser');
+        browser.className = `layout-${savedLayout}`;
+
+        if (savedLayout === 'left') {
+            const collapsed = this.storage.get('sidebar-collapsed') === 'true';
+            if (collapsed) {
+                browser.classList.add('collapsed');
+            }
+        }
+    }
+
+    toggleLayout() {
+        const browser = document.getElementById('browser');
+        const isTop = browser.classList.contains('layout-top');
+
+        if (isTop) {
+            browser.classList.remove('layout-top');
+            browser.classList.add('layout-left');
+            this.storage.set('layout', 'left');
+        } else {
+            browser.classList.remove('layout-left', 'collapsed');
+            browser.classList.add('layout-top');
+            this.storage.set('layout', 'top');
+        }
+
+        // Resize canvas after layout change
+        setTimeout(() => this.renderer.resize(), 300);
+    }
+
+    toggleCollapse() {
+        const browser = document.getElementById('browser');
+        if (!browser.classList.contains('layout-left')) return;
+
+        browser.classList.toggle('collapsed');
+        this.storage.set('sidebar-collapsed', browser.classList.contains('collapsed'));
+
+        // Resize canvas after collapse animation
+        setTimeout(() => this.renderer.resize(), 300);
+    }
+
+    // Settings methods
+    showSettings() {
+        document.getElementById('settings-modal').classList.remove('hidden');
+    }
+
+    hideSettings() {
+        document.getElementById('settings-modal').classList.add('hidden');
     }
 }
 
