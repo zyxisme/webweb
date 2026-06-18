@@ -82,3 +82,5 @@ const ZoomManager = {
     }
   }
 };
+
+export { ZoomManager };

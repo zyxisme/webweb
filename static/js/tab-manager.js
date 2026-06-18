@@ -403,3 +403,5 @@ const TabManager = {
     }
   }
 };
+
+export { TabManager };

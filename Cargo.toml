@@ -1,15 +1,42 @@
 [package]
 name = "webweb"
-version = "0.1.0"
+version = "2.0.0"
 edition = "2021"
 
 [dependencies]
-axum = "0.7"
+# Web framework
+axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = ["cookies"] }
-clap = { version = "4", features = ["derive"] }
-rust-embed = { version = "8", features = ["mime-guess"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors"] }
+
+# Headless browser
+chromiumoxide = { version = "0.7", features = ["tokio-runtime"] }
+
+# Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-bytes = "1"
+
+# Static files
+rust-embed = { version = "8", features = ["mime-guess"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["cookies"] }
+
+# Utilities
 url = "2"
+bytes = "1"
+futures = "0.3"
+uuid = { version = "1", features = ["v4"] }
+log = "0.4"
+env_logger = "0.10"
+
+# Optional: performance
+jemallocator = { version = "0.5", optional = true }
+
+[features]
+default = []
+jemalloc = ["jemallocator"]

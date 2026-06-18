@@ -1,293 +1,308 @@
-// js/app.js
-const App = {
-  // Log buffer
-  logBuffer: [],
-  maxLogLines: 1000,
+import { WsClient } from './ws-client.js';
+import { CanvasRenderer } from './canvas-renderer.js';
+import { StorageManager } from './storage.js';
+import { TabManager } from './tab-manager.js';
+import { ZoomManager } from './zoom.js';
 
-  // Initialize application
-  async init() {
-    // Initialize proxy manager first (detect best proxy)
-    await ProxyManager.init();
+class App {
+    constructor() {
+        this.ws = new WsClient();
+        this.renderer = new CanvasRenderer('browser-canvas');
+        this.storage = new StorageManager();
+        this.tabManager = new TabManager(this.storage);
+        this.zoomManager = new ZoomManager(this.storage);
 
-    // Initialize tab manager
-    TabManager.init();
+        this.activeTabId = null;
+        this.tabs = new Map();
 
-    // Initialize zoom manager
-    ZoomManager.init();
+        this.init();
+    }
 
-    // Bind events
-    this.bindEvents();
-
-    // Restore layout
-    this.restoreLayout();
-
-    // Restore collapsed state
-    this.restoreCollapsed();
-
-    this.log('WebWeb Browser initialized');
-  },
-
-  // Log helper - outputs to console and log panel
-  log(...args) {
-    const timestamp = new Date().toLocaleTimeString();
-    const message = args.map(arg => {
-      if (typeof arg === 'object') {
+    async init() {
+        // Connect WebSocket
         try {
-          return JSON.stringify(arg, null, 2);
-        } catch {
-          return String(arg);
+            await this.ws.connect();
+            console.log('WebSocket connected');
+        } catch (e) {
+            console.error('Failed to connect WebSocket:', e);
         }
-      }
-      return String(arg);
-    }).join(' ');
 
-    const logEntry = `[${timestamp}] ${message}`;
+        // Bind events
+        this.bindEvents();
 
-    // Output to console
-    console.log('[WebWeb]', ...args);
+        // Setup WebSocket handlers
+        this.setupWsHandlers();
 
-    // Add to buffer
-    this.logBuffer.push(logEntry);
-
-    // Trim buffer if too large
-    if (this.logBuffer.length > this.maxLogLines) {
-      this.logBuffer = this.logBuffer.slice(-this.maxLogLines);
+        // Create initial tab
+        this.createTab();
     }
 
-    // Update log display if settings modal is open
-    this.updateLogDisplay();
-  },
+    bindEvents() {
+        // URL input
+        const urlInput = document.getElementById('url-input');
+        const goBtn = document.getElementById('btn-go');
 
-  // Update log display in settings modal
-  updateLogDisplay() {
-    const logOutput = document.getElementById('log-output');
-    if (logOutput) {
-      logOutput.textContent = this.logBuffer.join('\n');
-      // Auto-scroll to bottom
-      logOutput.scrollTop = logOutput.scrollHeight;
-    }
-  },
+        urlInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                this.navigateToUrl(urlInput.value);
+            }
+        });
 
-  // Bind all events
-  bindEvents() {
-    // New tab button
-    document.getElementById('new-tab-btn').addEventListener('click', () => {
-      TabManager.createTab();
-      document.getElementById('url-input').focus();
-    });
+        goBtn.addEventListener('click', () => {
+            this.navigateToUrl(urlInput.value);
+        });
 
-    // URL input enter navigation
-    document.getElementById('url-input').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        this.navigateToUrl();
-      }
-    });
+        // Navigation buttons
+        document.getElementById('btn-back')?.addEventListener('click', () => {
+            // TODO: Implement back navigation
+        });
 
-    // Go button
-    document.getElementById('go-btn').addEventListener('click', () => {
-      this.navigateToUrl();
-    });
+        document.getElementById('btn-forward')?.addEventListener('click', () => {
+            // TODO: Implement forward navigation
+        });
 
-    // Zoom buttons
-    document.getElementById('zoom-in-btn').addEventListener('click', () => {
-      ZoomManager.zoomIn();
-    });
+        document.getElementById('btn-refresh')?.addEventListener('click', () => {
+            this.refreshCurrentTab();
+        });
 
-    document.getElementById('zoom-out-btn').addEventListener('click', () => {
-      ZoomManager.zoomOut();
-    });
+        // New tab button
+        document.getElementById('btn-new-tab')?.addEventListener('click', () => {
+            this.createTab();
+        });
 
-    // Layout toggle button
-    document.getElementById('layout-toggle-btn').addEventListener('click', () => {
-      this.toggleLayout();
-    });
+        // Canvas events
+        this.bindCanvasEvents();
 
-    // Collapse button
-    document.getElementById('collapse-btn').addEventListener('click', () => {
-      this.toggleCollapsed();
-    });
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            this.handleKeyboard(e);
+        });
 
-    // Settings button
-    document.getElementById('settings-btn').addEventListener('click', () => {
-      this.openSettings();
-    });
-
-    // Close settings button
-    document.getElementById('close-settings-btn').addEventListener('click', () => {
-      this.closeSettings();
-    });
-
-    // Settings modal background click
-    document.getElementById('settings-modal').addEventListener('click', (e) => {
-      if (e.target.id === 'settings-modal') {
-        this.closeSettings();
-      }
-    });
-
-    // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-      // Ctrl+T: New tab
-      if (e.ctrlKey && e.key === 't') {
-        e.preventDefault();
-        TabManager.createTab();
-        document.getElementById('url-input').focus();
-      }
-
-      // Ctrl+W: Close tab
-      if (e.ctrlKey && e.key === 'w') {
-        e.preventDefault();
-        const activeTab = TabManager.getActiveTab();
-        if (activeTab) {
-          TabManager.closeTab(activeTab.id);
-        }
-      }
-
-      // Ctrl+Plus: Zoom in
-      if (e.ctrlKey && (e.key === '+' || e.key === '=')) {
-        e.preventDefault();
-        ZoomManager.zoomIn();
-      }
-
-      // Ctrl+Minus: Zoom out
-      if (e.ctrlKey && e.key === '-') {
-        e.preventDefault();
-        ZoomManager.zoomOut();
-      }
-
-      // Ctrl+0: Reset zoom
-      if (e.ctrlKey && e.key === '0') {
-        e.preventDefault();
-        ZoomManager.resetZoom();
-      }
-    });
-
-    // Save state before page unload
-    window.addEventListener('beforeunload', () => {
-      // State is already saved in each operation
-    });
-  },
-
-  // Navigate to URL
-  async navigateToUrl() {
-    const urlInput = document.getElementById('url-input');
-    let url = urlInput.value.trim();
-
-    if (!url) return;
-
-    // Auto-add https:// prefix
-    if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('about:')) {
-      url = 'https://' + url;
+        // Window resize
+        window.addEventListener('resize', () => {
+            this.renderer.resize();
+        });
     }
 
-    this.log('Navigating to:', url);
+    bindCanvasEvents() {
+        const canvas = document.getElementById('browser-canvas');
 
-    const activeTab = TabManager.getActiveTab();
-    if (activeTab) {
-      const iframe = document.getElementById('iframe-' + activeTab.id);
-      if (iframe) {
-        // Update tab state
-        const state = StorageManager.getState();
-        const tab = state.tabs.find(t => t.id === activeTab.id);
+        // Mouse events
+        canvas.addEventListener('mousedown', (e) => this.handleMouse(e, 'mousedown'));
+        canvas.addEventListener('mouseup', (e) => this.handleMouse(e, 'mouseup'));
+        canvas.addEventListener('mousemove', (e) => this.handleMouse(e, 'mousemove'));
+        canvas.addEventListener('click', (e) => this.handleMouse(e, 'click'));
+        canvas.addEventListener('dblclick', (e) => this.handleMouse(e, 'dblclick'));
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            this.handleMouse(e, 'contextmenu');
+        });
+
+        // Scroll events
+        canvas.addEventListener('wheel', (e) => this.handleScroll(e));
+    }
+
+    setupWsHandlers() {
+        this.ws.on('dom_full', (msg) => {
+            this.renderer.setDomTree(msg.dom);
+        });
+
+        this.ws.on('dom_diff', (msg) => {
+            // TODO: Apply incremental DOM updates
+        });
+
+        this.ws.on('title', (msg) => {
+            this.updateTabTitle(msg.tab_id, msg.title);
+        });
+
+        this.ws.on('url', (msg) => {
+            this.updateTabUrl(msg.tab_id, msg.url);
+        });
+
+        this.ws.on('error', (msg) => {
+            console.error('Server error:', msg.message);
+        });
+
+        this.ws.on('tab_created', (msg) => {
+            console.log('Tab created:', msg.tab_id);
+        });
+
+        this.ws.on('tab_closed', (msg) => {
+            console.log('Tab closed:', msg.tab_id);
+        });
+
+        this.ws.on('scroll_update', (msg) => {
+            if (msg.tab_id === this.activeTabId) {
+                this.renderer.updateScroll(msg.scroll_top, msg.scroll_left);
+            }
+        });
+    }
+
+    createTab(url = 'about:blank') {
+        const tabId = this.tabManager.createTab(url);
+        this.tabs.set(tabId, { url, title: '新标签页' });
+
+        // Tell backend to create tab
+        this.ws.send({
+            type: 'tab_create',
+            tab_id: tabId
+        });
+
+        // Switch to new tab
+        this.switchTab(tabId);
+
+        return tabId;
+    }
+
+    switchTab(tabId) {
+        this.activeTabId = tabId;
+        this.tabManager.switchTab(tabId);
+
+        // Request DOM from backend
+        this.ws.send({
+            type: 'get_dom',
+            tab_id: tabId
+        });
+
+        // Update address bar
+        const tab = this.tabs.get(tabId);
         if (tab) {
-          tab.url = url;
-          StorageManager.setState(state);
+            document.getElementById('url-input').value = tab.url;
+            document.title = tab.title + ' - WebWeb';
+        }
+    }
+
+    closeTab(tabId) {
+        // Tell backend to close tab
+        this.ws.send({
+            type: 'tab_close',
+            tab_id: tabId
+        });
+
+        // Remove from local state
+        this.tabs.delete(tabId);
+        this.tabManager.closeTab(tabId);
+
+        // Switch to another tab if this was active
+        if (this.activeTabId === tabId) {
+            const remaining = Array.from(this.tabs.keys());
+            if (remaining.length > 0) {
+                this.switchTab(remaining[remaining.length - 1]);
+            } else {
+                this.createTab();
+            }
+        }
+    }
+
+    navigateToUrl(url) {
+        if (!url) return;
+
+        // Add protocol if missing
+        if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('about:')) {
+            if (url.includes('.') && !url.includes(' ')) {
+                url = 'https://' + url;
+            } else {
+                url = `https://www.google.com/search?q=${encodeURIComponent(url)}`;
+            }
         }
 
-        // Load through proxy
-        this.log('Loading page through proxy...');
-        const result = await ProxyManager.loadPage(iframe, url);
-
-        // Update title and favicon
-        if (result.title) {
-          this.log('Page title:', result.title);
-          TabManager.updateTabTitle(activeTab.id, result.title);
-        } else {
-          TabManager.updateTabTitle(activeTab.id, url);
+        // Update local state
+        if (this.tabs.has(this.activeTabId)) {
+            this.tabs.get(this.activeTabId).url = url;
         }
-        TabManager.updateTabFavicon(activeTab.id, url);
-        if (tab) TabManager.updateBrowserChrome(tab);
-      }
+
+        // Tell backend to navigate
+        this.ws.send({
+            type: 'navigate',
+            tab_id: this.activeTabId,
+            url: url
+        });
+
+        // Update address bar
+        document.getElementById('url-input').value = url;
     }
-  },
 
-  // Toggle layout
-  toggleLayout() {
-    const state = StorageManager.getState();
-    const newLayout = state.layout === 'top' ? 'left' : 'top';
-    state.layout = newLayout;
-    StorageManager.setState(state);
-
-    this.applyLayout(newLayout);
-  },
-
-  // Apply layout
-  applyLayout(layout) {
-    const browser = document.getElementById('browser');
-
-    // Clear layout classes
-    browser.classList.remove('layout-top', 'layout-left');
-    browser.classList.add('layout-' + layout);
-
-    // Update layout toggle button icon
-    const toggleBtn = document.getElementById('layout-toggle-btn');
-    toggleBtn.textContent = layout === 'top' ? '⊟' : '⊞';
-
-    // Show/hide collapse button based on layout
-    const collapseBtn = document.getElementById('collapse-btn');
-    collapseBtn.style.display = layout === 'left' ? 'flex' : 'none';
-
-    // Restore collapsed state for left layout
-    if (layout === 'left') {
-      const state = StorageManager.getState();
-      if (state.collapsed) {
-        browser.classList.add('collapsed');
-      }
+    refreshCurrentTab() {
+        const tab = this.tabs.get(this.activeTabId);
+        if (tab && tab.url) {
+            this.navigateToUrl(tab.url);
+        }
     }
-  },
 
-  // Toggle collapsed state (only for left layout)
-  toggleCollapsed() {
-    const state = StorageManager.getState();
-    const browser = document.getElementById('browser');
+    updateTabTitle(tabId, title) {
+        if (this.tabs.has(tabId)) {
+            this.tabs.get(tabId).title = title;
+            this.tabManager.updateTabTitle(tabId, title);
 
-    state.collapsed = !state.collapsed;
-    StorageManager.setState(state);
-
-    if (state.collapsed) {
-      browser.classList.add('collapsed');
-    } else {
-      browser.classList.remove('collapsed');
+            if (tabId === this.activeTabId) {
+                document.title = title + ' - WebWeb';
+            }
+        }
     }
-  },
 
-  // Restore collapsed state
-  restoreCollapsed() {
-    const state = StorageManager.getState();
-    if (state.layout === 'left' && state.collapsed) {
-      document.getElementById('browser').classList.add('collapsed');
+    updateTabUrl(tabId, url) {
+        if (this.tabs.has(tabId)) {
+            this.tabs.get(tabId).url = url;
+
+            if (tabId === this.activeTabId) {
+                document.getElementById('url-input').value = url;
+            }
+        }
     }
-  },
 
-  // Restore layout
-  restoreLayout() {
-    const state = StorageManager.getState();
-    this.applyLayout(state.layout);
-  },
+    handleMouse(event, eventType) {
+        if (!this.activeTabId) return;
 
-  // Open settings modal
-  openSettings() {
-    // Update log display
-    this.updateLogDisplay();
-    document.getElementById('settings-modal').classList.remove('hidden');
-  },
+        const rect = event.target.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
 
-  // Close settings modal
-  closeSettings() {
-    document.getElementById('settings-modal').classList.add('hidden');
-  }
-};
+        this.ws.send({
+            type: 'mouse',
+            tab_id: this.activeTabId,
+            x: x,
+            y: y,
+            event_type: eventType,
+            button: event.button
+        });
+    }
 
-// Initialize when DOM is ready
+    handleScroll(event) {
+        if (!this.activeTabId) return;
+
+        event.preventDefault();
+
+        const rect = event.target.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+
+        this.ws.send({
+            type: 'scroll',
+            tab_id: this.activeTabId,
+            x: x,
+            y: y,
+            delta_x: event.deltaX,
+            delta_y: event.deltaY
+        });
+    }
+
+    handleKeyboard(event) {
+        if (!this.activeTabId) return;
+
+        // Don't capture when typing in URL input
+        if (event.target.id === 'url-input') return;
+
+        this.ws.send({
+            type: 'keyboard',
+            tab_id: this.activeTabId,
+            key: event.key,
+            code: event.code,
+            event_type: event.type
+        });
+    }
+}
+
+// Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  App.init();
+    window.app = new App();
 });

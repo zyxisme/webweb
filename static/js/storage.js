@@ -66,3 +66,5 @@ const StorageManager = {
     return this.remove(this.STORAGE_KEY);
   }
 };
+
+export { StorageManager };

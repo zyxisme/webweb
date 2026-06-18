@@ -173,7 +173,18 @@ body {
 #main-area {
   display: flex;
   flex: 1;
+  position: relative;
   overflow: hidden;
+  background: #ffffff;
+}
+
+#browser-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  cursor: default;
 }
 
 /* ==================== TOP LAYOUT ==================== */
@@ -672,6 +683,46 @@ body {
 
 .log-output .log-success {
   color: #6a9955;
+}
+
+/* Loading overlay */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.9);
+  z-index: 10;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #1a73e8;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Status bar (optional) */
+#status-bar {
+  height: 24px;
+  background: #f8f9fa;
+  border-top: 1px solid #dadce0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 12px;
+  color: #5f6368;
 }
 
 /* Responsive */

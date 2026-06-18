@@ -123,6 +123,26 @@ cargo build --release
 - 偏好前端方案：优先使用纯JavaScript实现，避免引入服务器依赖
 - Rust 后端已取代纯前端 Service Worker 方案
 
+## Rust 开发命令
+
+```bash
+# 运行测试
+cargo test
+
+# 检查编译
+cargo check
+
+# 构建发布版本
+cargo build --release
+```
+
+## 重要架构决策
+
+- **Cargo.lock 版本控制**：二进制 crate 应该提交 Cargo.lock 以确保可复现构建
+- **SSRF 保护**：代理拒绝私有 IP 地址（10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x）
+- **共享 HTTP 客户端**：使用 `axum::Extension` 共享 `reqwest::Client` 实例以提高性能
+- **CORS 头部**：所有代理响应都包含 `access-control-allow-origin: *`
+
 ## 使用方式
 
 ```bash

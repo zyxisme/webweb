@@ -1,17 +1,21 @@
 // main.rs - Entry point, CLI parsing, server startup
 
-mod proxy;
+mod browser;
+mod dom;
 mod static_files;
+mod ws;
 
 use axum::{
     extract::Path,
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post},
-    Router,
+    routing::get,
+    Extension, Router,
 };
+use browser::BrowserManager;
 use clap::Parser;
-use proxy::AppState;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Parser)]
 #[command(name = "webweb")]
@@ -67,20 +71,31 @@ async fn static_handler(Path(path): Path<String>) -> impl IntoResponse {
     }
 }
 
+async fn health_check() -> &'static str {
+    "OK"
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
 
-    let state = AppState::new();
+    // Initialize browser manager
+    let browser = Arc::new(Mutex::new(
+        BrowserManager::new()
+            .await
+            .expect("Failed to start browser"),
+    ));
 
     let app = Router::new()
-        .route("/proxy", post(proxy::proxy_handler))
-        .route("/proxy", get(proxy::proxy_handler))
+        .route("/health", get(health_check))
+        .route("/ws", get(ws::ws_handler))
         .route("/", get(|| async { static_files::static_handler("index.html").await }))
         .route("/*path", get(static_handler))
-        .with_state(state);
+        .layer(Extension(browser));
 
     let listener = try_bind(&cli.bind).await.unwrap();
+
+    println!("[INFO] WebWeb 2.0 listening on http://{}", listener.local_addr().unwrap());
 
     axum::serve(listener, app).await.unwrap();
 }
