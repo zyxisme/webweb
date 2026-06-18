@@ -15,10 +15,8 @@ pub struct BrowserManager {
 impl BrowserManager {
     pub async fn new(chrome_path: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
         let mut builder = BrowserConfig::builder()
-            .disable_default_args()
-            .arg("--headless=new")
-            .arg("--no-sandbox")
-            .arg("--disable-setuid-sandbox")
+            .new_headless_mode()
+            .no_sandbox()
             .arg("--disable-dev-shm-usage")
             .arg("--disable-gpu");
 
