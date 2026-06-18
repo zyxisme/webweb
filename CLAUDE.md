@@ -48,7 +48,7 @@ webweb/
 ```
 
 - `src/browser.rs` - Chrome 浏览器管理器（chromiumoxide）
-- `src/dom.rs` - DOM 提取器（CDP DOM.getDocument）
+- `src/dom.rs` - DOM 提取器（JS 评估获取 DOM + 样式 + 布局）
 - `src/ws.rs` - WebSocket 处理器（事件转发）
 - `src/static_files.rs` - 静态文件服务（rust-embed编译时嵌入）
 - `static/js/canvas-renderer.js` - Canvas 渲染器
@@ -105,6 +105,9 @@ cargo build --release
 - `node_value` 是 `String` 不是 `Option<String>`
 - 导入路径：`chromiumoxide::cdp::browser_protocol::dom::Node`
 - 使用 CDP 原生事件（DispatchMouseEvent/DispatchKeyEvent）优于 JavaScript 评估
+- `page.evaluate()` 返回 `Result<EvaluationResult>`，用 `.value()` 获取 `Option<&serde_json::Value>`
+- `page.url()` 和 `page.get_title()` 都返回 `Result<Option<String>>`
+- `handle_message` 返回 `Vec<ServerMessage>` 支持单次请求多条响应
 
 ## Rust 开发命令
 
@@ -125,6 +128,7 @@ cargo build --release
 - **Canvas 渲染**：DOM 序列化 + Canvas 重绘，不使用 iframe
 - **WebSocket 通信**：实时双向通信，JSON 消息格式
 - **CDP 事件转发**：使用原生 CDP 事件而非 JavaScript 评估
+- **DOM 提取**：使用 JS 评估一次性获取 DOM 树 + 计算样式 + 布局，避免逐节点 CDP 调用
 
 ## 使用方式
 
@@ -147,6 +151,14 @@ open http://localhost:7899
 - 默认端口：7899（可通过 `-b` 参数自定义）
 - Canvas 渲染限制：不支持自动换行，简化渲染
 - WebSocket 消息格式：JSON，使用 `serde(tag = "type")` 判别
+
+## JavaScript ES 模块注意事项
+
+- `storage.js`、`tab-manager.js`、`zoom.js` 导出的是普通对象（单例），不是 class，不要用 `new`
+- ES 模块必须显式 import 依赖，没有隐式全局变量
+- `tabManager.createTab()` 返回 tab ID 字符串，不是完整的 tab 对象
+- JS 中 CSS 属性用 camelCase（`marginTop`），不是 kebab-case（`margin-top`）
+- `getBoundingClientRect()` 返回视口相对坐标，需要加 `scrollX/scrollY` 转为页面绝对坐标
 
 ## 快捷键
 
