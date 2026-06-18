@@ -6,26 +6,59 @@
 
 ```
 webweb/
-├── index.html          # 主页面
-├── sw.js               # Service Worker（代理功能）
-├── css/
-│   └── style.css       # 样式文件
-├── js/
-│   ├── storage.js      # localStorage管理
-│   ├── proxy.js        # Service Worker代理管理
-│   ├── tab-manager.js  # 标签页CRUD
-│   ├── zoom.js         # 缩放控制
-│   └── app.js          # 主应用逻辑
+├── Cargo.toml          # Rust项目配置
+├── src/
+│   ├── main.rs         # 入口点，CLI解析，服务器启动
+│   ├── proxy.rs        # 代理处理器（请求转发，头部过滤）
+│   └── static_files.rs # 静态文件服务（rust-embed）
+├── static/
+│   ├── index.html      # 主页面
+│   ├── sw.js           # Service Worker（URL重写）
+│   ├── css/
+│   │   └── style.css   # 样式文件
+│   └── js/
+│       ├── storage.js      # localStorage管理
+│       ├── proxy.js        # Service Worker代理管理
+│       ├── tab-manager.js  # 标签页CRUD
+│       ├── zoom.js         # 缩放控制
+│       └── app.js          # 主应用逻辑
+├── build.sh            # 跨平台构建脚本
 └── docs/
     └── superpowers/
         ├── specs/      # 设计文档
         └── plans/      # 实现计划
 ```
 
+## Rust Backend
+
+webweb 使用 Rust 后端提供静态文件服务和代理功能。
+
+### 运行
+
+```bash
+cargo run
+# 或指定端口
+./target/release/webweb -b 0.0.0.0:7899
+```
+
+### 构建
+
+```bash
+cargo build --release
+```
+
+### 架构
+
+- `src/main.rs` - 入口点，CLI解析，服务器启动
+- `src/proxy.rs` - 代理处理器（请求转发，头部过滤）
+- `src/static_files.rs` - 静态文件服务（rust-embed编译时嵌入）
+- `static/` - 前端文件（编译时嵌入二进制）
+- `sw.js` - 最小化Service Worker（仅URL重写）
+
 ## 技术栈
 
-- 纯HTML/CSS/JavaScript
-- 无构建工具，需要通过 HTTP 服务器访问（Service Worker 要求）
+- Rust + Axum（后端）
+- HTML/CSS/JavaScript（前端）
 - localStorage持久化状态
 
 ## 核心功能
@@ -89,33 +122,36 @@ webweb/
 
 - 用户偏好：简洁直接的回复，避免冗长的技术解释
 - 偏好前端方案：优先使用纯JavaScript实现，避免引入服务器依赖
-- Service Worker 代理已取代 Node.js 服务器方案，无需 `server.js`
+- Rust 后端已取代纯前端 Service Worker 方案
 
 ## 使用方式
 
-通过 HTTP 服务器访问 `index.html`（Service Worker 需要 HTTPS 或 localhost）。
-
-推荐使用 Python 快速启动：
 ```bash
-python3 -m http.server 8080
-```
+# 开发模式
+cargo run
 
-然后访问 `http://localhost:8080`。
+# 生产构建
+cargo build --release
+./target/release/webweb
+
+# 访问
+open http://localhost:7899
+```
 
 ## 技术笔记
 
 - Git推送使用SSH：`git@github.com:zyxisme/webweb.git`（HTTPS认证不可用）
 - Favicon服务：`https://www.google.com/s2/favicons?domain=DOMAIN&sz=32`
-- **Service Worker代理**：通过 `sw.js` 拦截带有 `?url=` 参数的请求，剔除安全头部并添加 CORS 头部
-- 代理URL格式：`/?url=ENCODED_URL`（查询参数方式，兼容 GitHub Pages）
-- Service Worker 自动处理导航请求（链接点击、表单提交）
+- **Rust代理**：Axum处理器在服务端转发请求，剔除安全头部并添加CORS头部
+- 代理URL格式：`/proxy/ENCODED_URL`（路径方式）
+- Service Worker仅做URL重写，将`/proxy/`前缀的请求指向后端
 - iframe 使用 `src` 属性加载代理 URL（非 srcdoc）
-- iframe `load` 事件用于同步地址栏（解析 `?url=` 参数获取原始 URL）
+- iframe `load` 事件用于同步地址栏（解析代理URL获取原始 URL）
 - 地址栏始终在顶部（#address-bar在#main-area外层）
 - 布局类：`.layout-top` / `.layout-left` / `.collapsed` 均在#browser元素上
 - JS加载顺序：storage.js → proxy.js → tab-manager.js → zoom.js → app.js
 - proxy.js必须在tab-manager.js之前加载（TabManager依赖ProxyManager）
-- Service Worker 需要 HTTPS 或 localhost 环境
+- 默认端口：7899（可通过 `-b` 参数自定义）
 
 ## 快捷键
 
