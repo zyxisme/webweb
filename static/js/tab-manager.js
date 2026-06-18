@@ -74,7 +74,7 @@ const TabManager = {
       this.updateTabFavicon(newTab.id, url);
     }
 
-    return newTab;
+    return newTab.id;
   },
 
   // Close tab
