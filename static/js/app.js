@@ -8,9 +8,9 @@ class App {
     constructor() {
         this.ws = new WsClient();
         this.renderer = new CanvasRenderer('browser-canvas');
-        this.storage = new StorageManager();
-        this.tabManager = new TabManager(this.storage);
-        this.zoomManager = new ZoomManager(this.storage);
+        this.storage = StorageManager;
+        this.tabManager = TabManager;
+        this.zoomManager = ZoomManager;
 
         this.activeTabId = null;
         this.tabs = new Map();
