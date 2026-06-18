@@ -1,4 +1,7 @@
 // js/tab-manager.js
+import { StorageManager } from './storage.js';
+import { ZoomManager } from './zoom.js';
+
 const TabManager = {
   // Generate unique ID
   generateId() {

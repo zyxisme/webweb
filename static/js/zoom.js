@@ -1,4 +1,6 @@
 // js/zoom.js
+import { StorageManager } from './storage.js';
+
 const ZoomManager = {
   MIN_ZOOM: 0.3,
   MAX_ZOOM: 3.0,
