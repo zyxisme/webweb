@@ -1,0 +1,24 @@
+# Cross-compilation configuration for webweb
+# See: https://doc.rust-lang.org/cargo/reference/config.html
+
+# Default build target (comment out to build for host platform)
+# [build]
+# target = "x86_64-unknown-linux-gnu"
+
+# Linux targets (native on Linux)
+# No special linker configuration needed
+
+# macOS targets (requires macOS host or osxcross toolchain)
+# Install: rustup target add x86_64-apple-darwin aarch64-apple-darwin
+# On non-macOS: install osxcross and set linker below
+# [target.x86_64-apple-darwin]
+# linker = "x86_64-apple-darwin20.4-clang"
+# [target.aarch64-apple-darwin]
+# linker = "aarch64-apple-darwin20.4-clang"
+
+# Windows target (requires mingw-w64 on Linux)
+# Install: sudo apt install mingw-w64
+# Install: rustup target add x86_64-pc-windows-gnu
+# [target.x86_64-pc-windows-gnu]
+# linker = "x86_64-w64-mingw32-gcc"
+# rustflags = ["-C", "link-arg=-lws2_32"]
