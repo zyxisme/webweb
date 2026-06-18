@@ -16,9 +16,11 @@ impl BrowserManager {
     pub async fn new(chrome_path: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
         let mut builder = BrowserConfig::builder()
             .disable_default_args()
+            .arg("--headless=new")
             .arg("--no-sandbox")
             .arg("--disable-setuid-sandbox")
-            .arg("--disable-dev-shm-usage");
+            .arg("--disable-dev-shm-usage")
+            .arg("--disable-gpu");
 
         if let Some(path) = chrome_path {
             builder = builder.chrome_executable(path);
