@@ -47,7 +47,7 @@ fn filter_response_headers(headers: &HeaderMap) -> HeaderMap {
         }
     }
     filtered.insert(
-        "access-control-Allow-origin",
+        "access-control-allow-origin",
         "*".parse().unwrap(),
     );
     filtered
@@ -59,11 +59,17 @@ pub async fn proxy_handler(
     headers: HeaderMap,
     body: bytes::Bytes,
 ) -> Response {
-    let client = reqwest::Client::builder()
+    let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(60))
         .redirect(reqwest::redirect::Policy::none())
         .build()
-        .unwrap();
+    {
+        Ok(c) => c,
+        Err(e) => {
+            println!("[PROXY] Failed to create HTTP client: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to initialize HTTP client").into_response();
+        }
+    };
 
     let filtered_headers = filter_request_headers(&headers);
 
@@ -95,7 +101,7 @@ pub async fn proxy_handler(
                 body.len().to_string().parse().unwrap(),
             );
 
-            (StatusCode::from_u16(status.as_u16()).unwrap(), filtered_response_headers, body).into_response()
+            (StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY), filtered_response_headers, body).into_response()
         }
         Err(e) => {
             // Log error
