@@ -1,14 +1,107 @@
 // proxy.rs - Proxy logic (request forwarding, response handling)
 
-use axum::extract::Query;
+use axum::extract::{Query, State};
 use axum::http::{HeaderMap, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Deserialize)]
 pub struct ProxyParams {
     pub url: String,
+}
+
+/// Shared HTTP client state
+#[derive(Clone)]
+pub struct AppState {
+    pub client: Arc<reqwest::Client>,
+}
+
+impl AppState {
+    pub fn new() -> Self {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(60))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .expect("Failed to create HTTP client");
+        Self {
+            client: Arc::new(client),
+        }
+    }
+}
+
+/// Check if a hostname resolves to a private/internal IP address
+fn is_private_or_local_host(hostname: &str) -> bool {
+    // Block localhost by name
+    if hostname.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+
+    // Try to parse as IP address
+    if let Ok(ip) = hostname.parse::<IpAddr>() {
+        return is_private_ip(ip);
+    }
+
+    false
+}
+
+/// Check if an IP address is in a private/internal range
+fn is_private_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ipv4) => is_private_ipv4(ipv4),
+        IpAddr::V6(ipv6) => is_private_ipv6(ipv6),
+    }
+}
+
+fn is_private_ipv4(ip: Ipv4Addr) -> bool {
+    // 127.0.0.0/8 - Loopback
+    if ip.is_loopback() {
+        return true;
+    }
+    // 10.0.0.0/8 - Private
+    if ip.octets()[0] == 10 {
+        return true;
+    }
+    // 172.16.0.0/12 - Private
+    if ip.octets()[0] == 172 && (ip.octets()[1] >= 16 && ip.octets()[1] <= 31) {
+        return true;
+    }
+    // 192.168.0.0/16 - Private
+    if ip.octets()[0] == 192 && ip.octets()[1] == 168 {
+        return true;
+    }
+    // 169.254.0.0/16 - Link-local
+    if ip.is_link_local() {
+        return true;
+    }
+    // 0.0.0.0 - Unspecified
+    if ip.is_unspecified() {
+        return true;
+    }
+    false
+}
+
+fn is_private_ipv6(ip: Ipv6Addr) -> bool {
+    // ::1 - Loopback
+    if ip.is_loopback() {
+        return true;
+    }
+    // fc00::/7 - Unique local addresses
+    let octets = ip.octets();
+    if (octets[0] & 0xfe) == 0xfc {
+        return true;
+    }
+    // fe80::/10 - Link-local
+    if ip.is_unicast_link_local() {
+        return true;
+    }
+    // :: - Unspecified
+    if ip.is_unspecified() {
+        return true;
+    }
+    false
 }
 
 const BLOCKED_REQUEST_HEADERS: &[&str] = &[
@@ -52,27 +145,45 @@ fn filter_response_headers(headers: &HeaderMap) -> HeaderMap {
     filtered
 }
 
+fn cors_headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert("access-control-allow-origin", "*".parse().unwrap());
+    headers
+}
+
 pub async fn proxy_handler(
+    State(state): State<AppState>,
     Query(params): Query<ProxyParams>,
     method: Method,
     headers: HeaderMap,
     body: bytes::Bytes,
 ) -> Response {
-    let client = match reqwest::Client::builder()
-        .timeout(Duration::from_secs(60))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-    {
-        Ok(c) => c,
-        Err(e) => {
-            println!("[PROXY] Failed to create HTTP client: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to initialize HTTP client").into_response();
+    // SSRF protection: validate the target URL
+    let target_url = match url::Url::parse(&params.url) {
+        Ok(u) => u,
+        Err(_) => {
+            let mut resp = (StatusCode::BAD_REQUEST, "Invalid URL").into_response();
+            *resp.headers_mut() = cors_headers();
+            return resp;
         }
     };
 
+    if let Some(hostname) = target_url.host_str() {
+        if is_private_or_local_host(hostname) {
+            println!("[PROXY] Blocked request to private/internal host: {}", hostname);
+            let mut resp = (StatusCode::FORBIDDEN, "Access to private/internal addresses is not allowed").into_response();
+            *resp.headers_mut() = cors_headers();
+            return resp;
+        }
+    } else {
+        let mut resp = (StatusCode::BAD_REQUEST, "URL has no host").into_response();
+        *resp.headers_mut() = cors_headers();
+        return resp;
+    }
+
     let filtered_headers = filter_request_headers(&headers);
 
-    let mut request = client.request(method.clone(), &params.url);
+    let mut request = state.client.request(method.clone(), &params.url);
 
     for (name, value) in filtered_headers.iter() {
         request = request.header(name.as_str(), value.as_bytes());
@@ -112,7 +223,9 @@ pub async fn proxy_handler(
                 "url": params.url
             });
 
-            (StatusCode::BAD_GATEWAY, error_response.to_string()).into_response()
+            let mut resp = (StatusCode::BAD_GATEWAY, error_response.to_string()).into_response();
+            *resp.headers_mut() = cors_headers();
+            resp
         }
     }
 }
@@ -262,5 +375,94 @@ mod tests {
         assert!(BLOCKED_RESPONSE_HEADERS.contains(&"content-security-policy"));
         assert!(BLOCKED_RESPONSE_HEADERS.contains(&"x-content-type-options"));
         assert!(BLOCKED_RESPONSE_HEADERS.contains(&"strict-transport-security"));
+    }
+
+    // SSRF validation tests
+    #[test]
+    fn test_is_private_ip_localhost_loopback() {
+        assert!(is_private_ip("127.0.0.1".parse().unwrap()));
+        assert!(is_private_ip("127.0.0.2".parse().unwrap()));
+        assert!(is_private_ip("127.255.255.255".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_is_private_ip_10_network() {
+        assert!(is_private_ip("10.0.0.1".parse().unwrap()));
+        assert!(is_private_ip("10.255.255.255".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_is_private_ip_172_16_network() {
+        assert!(is_private_ip("172.16.0.1".parse().unwrap()));
+        assert!(is_private_ip("172.31.255.255".parse().unwrap()));
+        // 172.15 and 172.32 should NOT be private
+        assert!(!is_private_ip("172.15.0.1".parse().unwrap()));
+        assert!(!is_private_ip("172.32.0.1".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_is_private_ip_192_168_network() {
+        assert!(is_private_ip("192.168.0.1".parse().unwrap()));
+        assert!(is_private_ip("192.168.255.255".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_is_private_ip_link_local() {
+        assert!(is_private_ip("169.254.1.1".parse().unwrap()));
+        assert!(is_private_ip("169.254.169.254".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_is_private_ip_public_ips() {
+        assert!(!is_private_ip("8.8.8.8".parse().unwrap()));
+        assert!(!is_private_ip("1.1.1.1".parse().unwrap()));
+        assert!(!is_private_ip("208.67.222.222".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_is_private_ipv6_loopback() {
+        assert!(is_private_ip("::1".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_is_private_ipv6_unique_local() {
+        assert!(is_private_ip("fc00::1".parse().unwrap()));
+        assert!(is_private_ip("fd00::1".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_is_private_ipv6_link_local() {
+        assert!(is_private_ip("fe80::1".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_is_private_ipv6_public() {
+        assert!(!is_private_ip("2001:4860:4860::8888".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_is_private_or_local_host_localhost() {
+        assert!(is_private_or_local_host("localhost"));
+        assert!(is_private_or_local_host("LOCALHOST"));
+    }
+
+    #[test]
+    fn test_is_private_or_local_host_private_ip_literal() {
+        assert!(is_private_or_local_host("127.0.0.1"));
+        assert!(is_private_or_local_host("10.0.0.1"));
+        assert!(is_private_or_local_host("192.168.1.1"));
+        assert!(is_private_or_local_host("::1"));
+    }
+
+    #[test]
+    fn test_is_private_or_local_host_public() {
+        assert!(!is_private_or_local_host("example.com"));
+        assert!(!is_private_or_local_host("google.com"));
+    }
+
+    #[test]
+    fn test_cors_headers() {
+        let headers = cors_headers();
+        assert_eq!(headers.get("access-control-allow-origin").unwrap(), "*");
     }
 }

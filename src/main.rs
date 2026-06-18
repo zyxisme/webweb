@@ -11,6 +11,7 @@ use axum::{
     Router,
 };
 use clap::Parser;
+use proxy::AppState;
 
 #[derive(Parser)]
 #[command(name = "webweb")]
@@ -59,7 +60,10 @@ async fn try_bind(addr: &str) -> Result<tokio::net::TcpListener, std::io::Error>
 async fn static_handler(Path(path): Path<String>) -> impl IntoResponse {
     match static_files::static_handler(&path).await {
         Ok((headers, body)) => (StatusCode::OK, headers, body).into_response(),
-        Err(status) => (status, "Not Found").into_response(),
+        Err(status) => {
+            let message = status.canonical_reason().unwrap_or("Not Found");
+            (status, message).into_response()
+        }
     }
 }
 
@@ -67,11 +71,14 @@ async fn static_handler(Path(path): Path<String>) -> impl IntoResponse {
 async fn main() {
     let cli = Cli::parse();
 
+    let state = AppState::new();
+
     let app = Router::new()
         .route("/proxy", post(proxy::proxy_handler))
         .route("/proxy", get(proxy::proxy_handler))
         .route("/", get(|| async { static_files::static_handler("index.html").await }))
-        .route("/*path", get(static_handler));
+        .route("/*path", get(static_handler))
+        .with_state(state);
 
     let listener = try_bind(&cli.bind).await.unwrap();
 

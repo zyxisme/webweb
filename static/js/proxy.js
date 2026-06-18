@@ -20,8 +20,6 @@ const ProxyManager = {
         App.log('Registration waiting:', !!registration.waiting);
 
         // Wait for Service Worker to be active
-        let sw = registration.active || registration.installing || registration.waiting;
-
         if (registration.installing) {
           App.log('Service Worker installing...');
           await new Promise((resolve) => {
@@ -66,10 +64,8 @@ const ProxyManager = {
 
   // Build proxy URL for a given URL
   buildProxyUrl(url) {
-    // Get base path (e.g., /webweb/ for GitHub Pages)
-    const basePath = window.location.pathname.replace(/\/[^\/]*$/, '/');
     const origin = window.location.origin;
-    return `${origin}${basePath}?url=${encodeURIComponent(url)}`;
+    return `${origin}/proxy?url=${encodeURIComponent(url)}`;
   },
 
   // Load a page into an iframe

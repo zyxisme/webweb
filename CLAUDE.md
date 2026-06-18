@@ -93,15 +93,14 @@ cargo build --release
 
 ### ProxyManager
 - `init()`：注册 Service Worker 并等待激活
-- `buildProxyUrl(url)`：构建代理 URL（`/?url=ENCODED_URL`）
-- `loadPage(iframe, url)`：通过 Service Worker 代理加载页面到 iframe
+- `buildProxyUrl(url)`：构建代理 URL（`/proxy?url=ENCODED_URL`）
+- `loadPage(iframe, url)`：通过代理加载页面到 iframe
 - `extractDomain(url)`：从 URL 提取域名
 
 ### Service Worker (sw.js)
-- 拦截带有 `?url=` 参数的请求
-- 剔除安全限制头部（X-Frame-Options, CSP 等）
-- 添加 CORS 头部（Access-Control-Allow-Origin: *）
-- 处理导航请求（链接点击、表单提交）
+- 最小化 Service Worker，仅做 URL 重写
+- 将页面内的子请求重写到 `/proxy?url=` 路径
+- 头部过滤和 CORS 处理由 Rust 后端负责
 
 ### TabManager
 - `createTab(url)` / `closeTab(tabId)` / `switchTab(tabId)`
@@ -143,8 +142,8 @@ open http://localhost:7899
 - Git推送使用SSH：`git@github.com:zyxisme/webweb.git`（HTTPS认证不可用）
 - Favicon服务：`https://www.google.com/s2/favicons?domain=DOMAIN&sz=32`
 - **Rust代理**：Axum处理器在服务端转发请求，剔除安全头部并添加CORS头部
-- 代理URL格式：`/proxy/ENCODED_URL`（路径方式）
-- Service Worker仅做URL重写，将`/proxy/`前缀的请求指向后端
+- 代理URL格式：`/proxy?url=ENCODED_URL`（查询参数方式）
+- Service Worker仅做URL重写，将页面内的子请求重写到`/proxy?url=`路径
 - iframe 使用 `src` 属性加载代理 URL（非 srcdoc）
 - iframe `load` 事件用于同步地址栏（解析代理URL获取原始 URL）
 - 地址栏始终在顶部（#address-bar在#main-area外层）
